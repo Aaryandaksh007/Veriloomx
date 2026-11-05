@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// VeriLoom AI — Living Brand Vault
+// Every clause carries a unique clause_id used for citation
+// grounding of every audit finding.
+// ─────────────────────────────────────────────────────────────
+model VaultItem {
+  id        String   @id @default(cuid())
+  clauseId  String   @unique // e.g. VL-VOICE-001
+  type      String // VOICE | FACT | TERM | COLOR | LOGO | CONFIDENTIAL | RULE
+  title     String
+  content   String // the rule text / fact statement (verbatim citation source)
+  extra     String? // JSON payload: { hex, replaceWith, aliases[], category, ... }
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Drafts (pre-publication content under governance)
+// ─────────────────────────────────────────────────────────────
+model Draft {
+  id        String   @id @default(cuid())
+  title     String
+  channel   String // LinkedIn | Web | Press | Social
+  kind      String // text | image
+  status    String // DRAFT | AUDITED | REMEDIATED | IN_REVIEW | CHANGES_REQUESTED | APPROVED
+  creator   String
+  content   String // latest text content (text drafts)
+  imageData String? // data URL (image drafts)
+  imageMeta String? // JSON: { palette: [{hex,ratio}], altText, width, height, fileName }
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions DraftVersion[]
+  comments Comment[]
+}
+
+model DraftVersion {
+  id        String   @id @default(cuid())
+  draftId   String
+  draft     Draft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  version   Int
+  content   String
+  note      String? // "Original submission" | "Remediated — 5 fixes applied"
+  createdAt DateTime @default(now())
+
+  @@index([draftId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Audit runs — one per executed 6-pillar audit
+// ─────────────────────────────────────────────────────────────
+model AuditRun {
+  id               String   @id @default(cuid())
+  draftId          String
+  version          Int
+  score            Int // 0–100 compliance score
+  pillarSummaries  String // JSON: PillarSummary[]
+  findings         String // JSON: Finding[]
+  suppressed       Int      @default(0) // ungrounded AI flags discarded by the citation validator
+  redactedPreview  String? // text actually transmitted to external AI (post-scrub)
+  aiLedger         String // JSON: [{ model, purpose, ts }] — transparent AI disclosure
+  createdAt        DateTime @default(now())
+
+  actions FindingAction[]
+
+  @@index([draftId])
+}
+
+// Creator decisions on individual findings (accept / override / edit)
+model FindingAction {
+  id          String   @id @default(cuid())
+  auditId     String
+  audit       AuditRun @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  findingKey  String
+  action      String // accepted | overridden | edited
+  actor       String
+  actorRole   String
+  note        String? // override justification (required for overrides)
+  appliedText String? // replacement that was applied
+  createdAt   DateTime @default(now())
+
+  @@index([auditId])
+}
+
+// Threaded review comments per draft
+model Comment {
+  id        String   @id @default(cuid())
+  draftId   String
+  draft     Draft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  author    String
+  role      String
+  body      String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([draftId])
+}
+
+// Immutable governance ledger — every AI call, override, status change
+model EventLog {
+  id        String   @id @default(cuid())
+  draftId   String?
+  actor     String
+  action    String // AUDIT_RUN | AI_CALL | OVERRIDE | ACCEPT | STATUS_CHANGE | VAULT_EDIT | CERT_ISSUED
+  details   String // JSON
+  createdAt DateTime @default(now())
+}
