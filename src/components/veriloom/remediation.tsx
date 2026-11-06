@@ -29,7 +29,7 @@ import type {
   FindingActionDTO,
 } from '@/lib/types'
 import { PILLAR_META } from '@/lib/types'
-import { CitationCard, SeverityChip, StatusChip, ClauseBadge } from './shared'
+import { CitationCard, SeverityChip, StatusChip, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -87,7 +87,13 @@ export function RemediationView() {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
+    <div className="space-y-5">
+      <ViewHeader
+        crumb="Remediation"
+        title="Explainable Remediation"
+        subtitle="Every flag cites its clause. Accept the surgical fix — or override it with a written justification that feeds the Blindspot Engine."
+      />
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
       {/* draft list */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Drafts</h2>
@@ -272,6 +278,7 @@ export function RemediationView() {
           )}
         </div>
       )}
+    </div>
     </div>
   )
 }

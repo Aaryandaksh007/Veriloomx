@@ -8,7 +8,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  LibraryBig,
   Search,
   ArrowRight,
   Type,
@@ -20,7 +19,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import type { VaultItemDTO } from '@/lib/types'
-import { ClauseBadge, HexSwatch, timeAgo } from './shared'
+import { ClauseBadge, HexSwatch, timeAgo, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -101,21 +100,17 @@ export function VaultView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-zinc-900">
-            <LibraryBig className="h-6 w-6 text-emerald-600" />
-            Living Brand Vault
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-            The single source of truth. Every audit finding must cite one of these
-            clauses — anything else is suppressed by the zero-hallucination guard.
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)} className="bg-emerald-600 hover:bg-emerald-500">
-          <Plus className="mr-1.5 h-4 w-4" /> Add clause
-        </Button>
-      </div>
+      <ViewHeader
+        crumb="Brand Vault"
+        title="Living Brand Vault"
+        subtitle="The single source of truth. Every audit finding must cite one of these clauses — anything else is suppressed by the zero-hallucination guard."
+        showDraftChip={false}
+        actions={
+          <Button onClick={() => setCreating(true)} className="bg-emerald-600 hover:bg-emerald-500">
+            <Plus className="mr-1.5 h-4 w-4" /> Add clause
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>

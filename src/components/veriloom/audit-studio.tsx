@@ -45,6 +45,7 @@ import {
   ScoreRing,
   SeverityChip,
   StatusChip,
+  ViewHeader,
 } from './shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,7 +77,13 @@ export function AuditStudioView() {
   const audit = selectedDraftId ? data?.audits[selectedDraftId] : undefined
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+    <div className="space-y-5">
+      <ViewHeader
+        crumb="Audit Studio"
+        title="Audit Studio"
+        subtitle="Submit text or visuals and run the parallel 6-pillar audit — deterministic math and citation-gated AI, side by side."
+      />
+      <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
       {/* draft list */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -138,6 +145,7 @@ export function AuditStudioView() {
             actor={roleIdentity(role).name}
           />
         )}
+      </div>
       </div>
     </div>
   )

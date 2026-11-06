@@ -4,6 +4,7 @@
 // VeriLoom AI — application shell
 // ─────────────────────────────────────────────────────────────
 import { useEffect } from 'react'
+import { motion } from 'framer-motion'
 import {
   LayoutDashboard,
   LibraryBig,
@@ -33,8 +34,8 @@ const NAV: { id: View; label: string; icon: React.ComponentType<{ className?: st
   { id: 'audit', label: 'Audit Studio', icon: ScanSearch, hint: '6-pillar pre-flight' },
   { id: 'remediation', label: 'Remediation', icon: WandSparkles, hint: 'Explainable fixes' },
   { id: 'review', label: 'Review & Approval', icon: ClipboardCheck, hint: 'RBAC sign-off' },
-  { id: 'analytics', label: 'Governance Analytics', icon: BarChart3, hint: 'Blindspot engine' },
-  { id: 'certificate', label: 'Compliance Certificate', icon: Award, hint: 'Tamper-evident proof' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, hint: 'Blindspot engine' },
+  { id: 'certificate', label: 'Certificate', icon: Award, hint: 'Tamper-evident proof' },
 ]
 
 export function Logo({ dark = false }: { dark?: boolean }) {
@@ -82,28 +83,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="px-5 pb-5 pt-6">
           <Logo dark />
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 vl-scroll-dark">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 vl-scroll-dark" aria-label="Main navigation">
           {NAV.map((item) => {
             const active = view === item.id
             return (
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
+                aria-current={active ? 'page' : undefined}
+                title={item.hint}
                 className={cn(
-                  'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                  'group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60',
                   active
-                    ? 'bg-emerald-500/10 text-emerald-300'
+                    ? 'text-emerald-300'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 )}
               >
+                {active && (
+                  <motion.span
+                    layoutId="vl-nav-active"
+                    className="absolute inset-0 rounded-lg bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/20"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
                 <item.icon
                   className={cn(
-                    'h-4 w-4 shrink-0',
+                    'relative z-10 h-4 w-4 shrink-0 transition-all duration-200 group-hover:scale-110',
                     active ? 'text-emerald-400' : 'text-zinc-500 group-hover:text-zinc-300'
                   )}
                 />
-                <span className="flex-1 truncate font-medium">{item.label}</span>
-                {active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+                <span className={cn('relative z-10 flex-1 truncate', active ? 'font-semibold' : 'font-medium')}>
+                  {item.label}
+                </span>
+                {active && (
+                  <motion.span
+                    layoutId="vl-nav-dot"
+                    className="relative z-10 h-1.5 w-1.5 rounded-full bg-emerald-400"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
               </button>
             )
           })}
@@ -128,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Select>
             <p className="mt-1.5 text-[10px] text-zinc-500">{ROLE_META[role].desc}</p>
           </div>
-          <div className="flex items-center gap-1.5 px-1 text-[10px] text-zinc-600">
+          <div className="flex items-center gap-1.5 px-1 text-[10px] text-zinc-500">
             <Github className="h-3 w-3" />
             Team opopopxxnot · We Code Coders
           </div>
@@ -155,27 +173,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SelectContent>
             </Select>
           </div>
-          <nav className="mt-3 flex gap-1.5 overflow-x-auto pb-1 vl-scroll">
-            {NAV.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setView(item.id)}
-                className={cn(
-                  'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
-                  view === item.id
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                    : 'border-zinc-200 bg-white text-zinc-600'
-                )}
-              >
-                <item.icon className="h-3.5 w-3.5" />
-                {item.label}
-              </button>
-            ))}
+          <nav className="mt-3 flex gap-1.5 overflow-x-auto pb-1 vl-scroll" aria-label="Main navigation">
+            {NAV.map((item) => {
+              const active = view === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setView(item.id)}
+                  aria-current={active ? 'page' : undefined}
+                  title={item.hint}
+                  className={cn(
+                    'relative flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 active:scale-95',
+                    active
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm'
+                      : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900'
+                  )}
+                >
+                  <item.icon className={cn('h-3.5 w-3.5', active && 'text-emerald-500')} />
+                  {item.label}
+                </button>
+              )
+            })}
           </nav>
         </div>
 
-        {/* scrollable content */}
-        <main className="vl-fadein flex-1 overflow-y-auto vl-scroll">
+        {/* scrollable content — per-view motion handled in page.tsx */}
+        <main className="flex-1 overflow-y-auto vl-scroll">
           <div className="mx-auto w-full max-w-[1380px] px-4 py-6 sm:px-6 lg:px-8 print:max-w-none print:px-0 print:py-0">
             {children}
           </div>

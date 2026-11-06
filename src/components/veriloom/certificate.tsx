@@ -20,6 +20,7 @@ import {
 import { useApp } from '@/lib/store'
 import type { CertificateData } from '@/lib/types'
 import { PILLAR_META, type Pillar } from '@/lib/types'
+import { ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -74,58 +75,52 @@ export function CertificateView() {
 
   return (
     <div className="space-y-4">
-      <div className="vl-noprint flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-zinc-900">
-            <Award className="h-6 w-6 text-emerald-600" />
-            Compliance Certificate
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Exportable, tamper-evident proof of governed publication.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={selected?.id}
-            onValueChange={(v) => selectDraft(v)}
-          >
-            <SelectTrigger className="h-9 w-72 border-zinc-200 text-xs">
-              <SelectValue placeholder="Select approved draft" />
-            </SelectTrigger>
-            <SelectContent>
-              {approved.map((d) => (
-                <SelectItem key={d.id} value={d.id} className="text-xs">
-                  {d.title} · v{d.version}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {currentCert && (
-            <>
-              <Button
-                variant="outline"
-                className="h-9"
-                onClick={async () => {
-                  const res = await fetch(`/api/certificate/${currentCert.draft.id}`, { cache: 'no-store' })
-                  if (!res.ok) return
-                  const fresh = (await res.json()) as CertificateData
-                  setToast(
-                    fresh.hash === currentCert.hash
-                      ? 'Integrity verified — hash matches the issued record.'
-                      : 'Hash mismatch! This certificate does not match the current record.',
-                    fresh.hash === currentCert.hash
-                  )
-                }}
-              >
-                <Fingerprint className="mr-1.5 h-4 w-4" /> Verify
-              </Button>
-              <Button className="h-9 bg-zinc-900 hover:bg-zinc-800" onClick={() => window.print()}>
-                <Printer className="mr-1.5 h-4 w-4" /> Print / Save PDF
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+      <ViewHeader
+        crumb="Certificate"
+        title="Compliance Certificate"
+        subtitle="Exportable, tamper-evident proof of governed publication."
+        className="vl-noprint"
+        actions={
+          <>
+            <Select value={selected?.id} onValueChange={(v) => selectDraft(v)}>
+              <SelectTrigger className="h-9 w-56 border-zinc-200 text-xs sm:w-72">
+                <SelectValue placeholder="Select approved draft" />
+              </SelectTrigger>
+              <SelectContent>
+                {approved.map((d) => (
+                  <SelectItem key={d.id} value={d.id} className="text-xs">
+                    {d.title} · v{d.version}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {currentCert && (
+              <>
+                <Button
+                  variant="outline"
+                  className="h-9"
+                  onClick={async () => {
+                    const res = await fetch(`/api/certificate/${currentCert.draft.id}`, { cache: 'no-store' })
+                    if (!res.ok) return
+                    const fresh = (await res.json()) as CertificateData
+                    setToast(
+                      fresh.hash === currentCert.hash
+                        ? 'Integrity verified — hash matches the issued record.'
+                        : 'Hash mismatch! This certificate does not match the current record.',
+                      fresh.hash === currentCert.hash
+                    )
+                  }}
+                >
+                  <Fingerprint className="mr-1.5 h-4 w-4" /> Verify
+                </Button>
+                <Button className="h-9 bg-zinc-900 hover:bg-zinc-800" onClick={() => window.print()}>
+                  <Printer className="mr-1.5 h-4 w-4" /> Print / Save PDF
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {!currentCert && (
         <div className="flex h-96 items-center justify-center">

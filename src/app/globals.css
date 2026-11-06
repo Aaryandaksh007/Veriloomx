@@ -150,18 +150,50 @@
   background: #52525b;
 }
 
-/* view transition fade */
-.vl-fadein > div {
-  animation: vl-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+/* view transitions are handled per-view with framer-motion in page.tsx */
+
+/* ── Micro-interaction utilities ───────────────────────── */
+/* Gentle lift for small interactive cards */
+.vl-lift {
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
-@keyframes vl-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@media (hover: hover) {
+  .vl-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px -14px rgb(9 9 11 / 0.18);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+}
+.vl-lift:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* Hairline + emerald dash under every unified view header */
+.vl-header-underline {
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid #f1f1f3;
+}
+.vl-header-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 56px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #10b981, #14b8a6);
+}
+
+/* Respect reduced motion for CSS-driven animation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

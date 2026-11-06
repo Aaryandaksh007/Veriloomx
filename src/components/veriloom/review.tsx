@@ -21,7 +21,7 @@ import {
 import { useApp, roleIdentity, type View } from '@/lib/store'
 import { ROLE_META, type CommentDTO, type DraftDTO, type DraftVersionDTO } from '@/lib/types'
 import { wordDiff } from '@/lib/diff'
-import { StatusChip, timeAgo, ClauseBadge } from './shared'
+import { StatusChip, timeAgo, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -113,7 +113,13 @@ export function ReviewView() {
   const draft = detail?.draft ?? selected
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
+    <div className="space-y-5">
+      <ViewHeader
+        crumb="Review & Approval"
+        title="Review & Approval"
+        subtitle="Side-by-side diffs, threaded comments and the RBAC state machine — managers pre-screen, only the Authorised Reviewer signs off."
+      />
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
       {/* draft list */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Drafts</h2>
@@ -371,6 +377,7 @@ export function ReviewView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

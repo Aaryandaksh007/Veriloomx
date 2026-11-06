@@ -3,8 +3,9 @@
 // ─────────────────────────────────────────────────────────────
 // VeriLoom AI — shared presentational components
 // ─────────────────────────────────────────────────────────────
-import { motion } from 'framer-motion'
-import { ShieldCheck, BadgeCheck, Cpu, Sparkles, Eye, FlaskConical } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { ShieldCheck, BadgeCheck, Cpu, Sparkles, Eye, FlaskConical, ChevronLeft } from 'lucide-react'
 import type {
   DraftStatus,
   EngineKind,
@@ -12,6 +13,7 @@ import type {
   Severity,
 } from '@/lib/types'
 import { ENGINE_META, STATUS_META } from '@/lib/types'
+import { useApp } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 export function SeverityChip({ severity, className }: { severity: Severity; className?: string }) {
@@ -186,18 +188,43 @@ export function HexSwatch({ hex, size = 18 }: { hex: string; size?: number }) {
   )
 }
 
+/** Spring count-up number — mounts at 0, settles on `value`. */
+export function AnimatedNumber({
+  value,
+  className,
+}: {
+  value: number
+  className?: string
+}) {
+  const mv = useMotionValue(0)
+  const spring = useSpring(mv, { stiffness: 90, damping: 24, mass: 0.6 })
+  const text = useTransform(spring, (v) => Math.round(v).toLocaleString())
+  const first = useRef(true)
+
+  useEffect(() => {
+    // small delay on mount so the dashboard feels like it "boots"
+    const t = setTimeout(() => mv.set(value), first.current ? 140 : 0)
+    first.current = false
+    return () => clearTimeout(t)
+  }, [value, mv])
+
+  return <motion.span className={className}>{text}</motion.span>
+}
+
 export function KpiCard({
   label,
   value,
   sub,
   icon: Icon,
   tone = 'default',
+  delay = 0,
 }: {
   label: string
   value: string | number
   sub?: string
   icon: React.ComponentType<{ className?: string }>
   tone?: 'default' | 'emerald' | 'amber' | 'rose'
+  delay?: number
 }) {
   const tones = {
     default: 'text-zinc-900',
@@ -205,17 +232,112 @@ export function KpiCard({
     amber: 'text-amber-600',
     rose: 'text-rose-600',
   }
+  const toneBorder = {
+    default: 'hover:border-zinc-300',
+    emerald: 'hover:border-emerald-300',
+    amber: 'hover:border-amber-300',
+    rose: 'hover:border-rose-300',
+  }
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      className={cn(
+        'group vl-lift rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm',
+        toneBorder[tone]
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p
+          title={label}
+          className="truncate text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+        >
           {label}
         </p>
-        <Icon className="h-4 w-4 text-zinc-400" />
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-zinc-900 group-hover:text-white">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
       </div>
-      <p className={cn('mt-1.5 text-2xl font-bold tabular-nums', tones[tone])}>{value}</p>
+      <p className={cn('mt-1.5 whitespace-nowrap text-2xl font-bold tabular-nums', tones[tone])}>
+        {typeof value === 'number' ? (
+          <AnimatedNumber value={value} />
+        ) : (
+          value
+        )}
+      </p>
       {sub && <p className="mt-0.5 text-[11px] text-zinc-400">{sub}</p>}
-    </div>
+    </motion.div>
+  )
+}
+
+/**
+ * Unified view header — every module hangs off the Dashboard,
+ * so each one opens with the same breadcrumb "← Dashboard › …",
+ * optional live draft context chip and an actions slot.
+ */
+export function ViewHeader({
+  crumb,
+  title,
+  subtitle,
+  actions,
+  showDraftChip = true,
+  className,
+}: {
+  crumb: string
+  title: string
+  subtitle?: string
+  actions?: React.ReactNode
+  showDraftChip?: boolean
+  className?: string
+}) {
+  const { setView, data, selectedDraftId } = useApp()
+  const draft = data?.drafts.find((d) => d.id === selectedDraftId) ?? null
+
+  return (
+    <motion.header
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className={cn('vl-header-underline relative mb-5', className)}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          onClick={() => setView('dashboard')}
+          className="group inline-flex items-center gap-1 rounded-md text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+        >
+          <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+          Dashboard
+        </button>
+        <span className="text-[10px] text-zinc-300" aria-hidden>/</span>
+        <span className="text-xs font-semibold text-zinc-900">{crumb}</span>
+
+        <span className="hidden h-4 w-px bg-zinc-200 sm:block" aria-hidden />
+
+        {showDraftChip && draft && (
+          <motion.span
+n            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1, duration: 0.3 }}
+            className="inline-flex max-w-[280px] items-center gap-1.5 truncate rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-medium text-zinc-700 shadow-sm"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <span className="truncate">{draft.title}</span>
+            <span className="shrink-0 text-zinc-400">·</span>
+            <span className="shrink-0 text-zinc-500">{STATUS_META[draft.status].label}</span>
+          </motion.span>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">{actions}</div>
+      </div>
+      <h1 className="mt-2 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+        {title}
+      </h1>
+      {subtitle && (
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+      )}
+    </motion.header>
   )
 }
 

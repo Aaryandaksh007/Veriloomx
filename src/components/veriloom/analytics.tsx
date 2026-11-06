@@ -20,7 +20,6 @@ import {
   YAxis,
 } from 'recharts'
 import {
-  BarChart3,
   Brain,
   Lightbulb,
   Loader2,
@@ -32,7 +31,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { PILLAR_META, type Pillar } from '@/lib/types'
-import { KpiCard, ClauseBadge, timeAgo } from './shared'
+import { KpiCard, ClauseBadge, timeAgo, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -135,16 +134,12 @@ export function AnalyticsView() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-zinc-900">
-          <BarChart3 className="h-6 w-6 text-emerald-600" />
-          Governance Analytics
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Recurring mistakes, override clusters and ambiguous guideline detection —
-          &ldquo;auditing the guidelines, not just the creator&rdquo;.
-        </p>
-      </div>
+      <ViewHeader
+        crumb="Analytics"
+        title="Governance Analytics"
+        subtitle="Recurring mistakes, override clusters and ambiguous guideline detection — auditing the guidelines, not just the creator."
+        showDraftChip={false}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
