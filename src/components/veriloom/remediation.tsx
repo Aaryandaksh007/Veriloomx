@@ -203,6 +203,11 @@ export function RemediationView() {
                       .filter((f) => f.box)
                       .map((f) => {
                         const done = actionsBy.has(f.key)
+                        // clamp VLM-sampled regions to the image bounds
+                        const x = Math.max(0, Math.min(f.box!.x, 100))
+                        const y = Math.max(0, Math.min(f.box!.y, 100))
+                        const w = Math.max(1, Math.min(f.box!.w, 100 - x))
+                        const h = Math.max(1, Math.min(f.box!.h, 100 - y))
                         return (
                           <button
                             key={f.key}
@@ -215,10 +220,10 @@ export function RemediationView() {
                               done && 'border-emerald-400 opacity-60'
                             )}
                             style={{
-                              left: `${f.box!.x}%`,
-                              top: `${f.box!.y}%`,
-                              width: `${f.box!.w}%`,
-                              height: `${f.box!.h}%`,
+                              left: `${x}%`,
+                              top: `${y}%`,
+                              width: `${w}%`,
+                              height: `${h}%`,
                             }}
                             title={f.title}
                           >
