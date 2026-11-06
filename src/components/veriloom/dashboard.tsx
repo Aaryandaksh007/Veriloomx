@@ -5,7 +5,6 @@
 // ─────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
 import {
-  ArrowRight,
   BookOpenCheck,
   FileStack,
   Flag,
@@ -13,6 +12,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Zap,
   Cpu,
   Eye,
   FlaskConical,
@@ -23,6 +23,9 @@ import {
 import { useApp } from '@/lib/store'
 import { PILLAR_META, type Pillar } from '@/lib/types'
 import { KpiCard, timeAgo, EngineChip, ClauseBadge } from './shared'
+import { ProblemSection } from './problem-section'
+import { LivePlayground } from './live-playground'
+import { DemoChecklist } from './demo-checklist'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -86,22 +89,34 @@ export function DashboardView() {
               size="lg"
               className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
               onClick={() => {
-                if (demoDraft) selectDraft(demoDraft.id, 'audit')
-                else setView('audit')
+                document
+                  .getElementById('live-playground')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                setTimeout(
+                  () =>
+                    document
+                      .querySelector<HTMLTextAreaElement>(
+                        'textarea[aria-label="Live brand check editor"]'
+                      )
+                      ?.focus(),
+                  450
+                )
               }}
             >
-              <ScanSearch className="mr-2 h-4 w-4" />
-              Run the demo audit
-              <ArrowRight className="ml-1 h-4 w-4" />
+              <Zap className="mr-2 h-4 w-4" />
+              Try it live — 10 seconds
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white"
-              onClick={() => setView('vault')}
+              onClick={() => {
+                if (demoDraft) selectDraft(demoDraft.id, 'audit')
+                else setView('audit')
+              }}
             >
-              <LibraryBig className="mr-2 h-4 w-4" />
-              Explore the Brand Vault
+              <ScanSearch className="mr-2 h-4 w-4" />
+              Run the seeded demo audit
             </Button>
           </div>
 
@@ -129,6 +144,14 @@ export function DashboardView() {
         </div>
       </section>
 
+      {/* ── The problem, in normal-person language ─────── */}
+      <ProblemSection />
+
+      {/* ── Live playground — the interactive entry point ── */}
+      <div id="live-playground" className="scroll-mt-6">
+        <LivePlayground />
+      </div>
+
       {/* ── KPI row ──────────────────────────────────────── */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label="Vault clauses" value={data?.vault.length ?? 0} sub="Indexed, citable rules" icon={LibraryBig} />
@@ -142,6 +165,9 @@ export function DashboardView() {
           tone="emerald"
         />
       </section>
+
+      {/* ── Guided 60-second demo ─────────────────────────── */}
+      <DemoChecklist />
 
       {/* ── Workflow ─────────────────────────────────────── */}
       <section>

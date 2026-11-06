@@ -70,16 +70,17 @@ export async function GET() {
   const ruleRows = [...ruleStats.values()]
     .map((r) => {
       const clause = clauseById.get(r.clauseId)
+      const overrideRate = r.violations ? r.overrides / r.violations : 0
       return {
         clauseId: r.clauseId,
         title: clause?.title ?? r.clauseId,
         type: clause?.type ?? '—',
         violations: r.violations,
         overrides: r.overrides,
-        overrideRate: r.violations ? r.overrides / r.violations : 0,
+        overrideRate,
         overrideReasons: r.overrideReasons.slice(0, 6),
         ambiguous:
-          (r.violations >= 3 && r.overrideRate >= 0.5) || r.overrides >= 2 || r.violations >= 5,
+          (r.violations >= 3 && overrideRate >= 0.5) || r.overrides >= 2 || r.violations >= 5,
         active: clause?.active ?? false,
       }
     })

@@ -4,7 +4,7 @@
 // VeriLoom AI — Audit Studio
 // Draft submission + parallel 6-pillar audit with results.
 // ─────────────────────────────────────────────────────────────
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ScanSearch,
@@ -25,6 +25,8 @@ import {
   CircleDot,
 } from 'lucide-react'
 import { useApp, roleIdentity } from '@/lib/store'
+import { liveScan } from '@/lib/live-check'
+import { LiveTextarea, LiveStatusStrip } from './live-editor'
 import {
   PILLAR_META,
   type AuditResult,
@@ -154,7 +156,7 @@ function DraftPanel({
   onAuditDone: () => Promise<void>
   actor: string
 }) {
-  const { selectDraft, setView } = useApp()
+  const { selectDraft, setView, data, autoAuditId, setAutoAudit } = useApp()
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0) // 0 idle, 1..6 pillar animation
   const [result, setResult] = useState<AuditResult | null>(audit)
@@ -162,6 +164,7 @@ function DraftPanel({
   const [altText, setAltText] = useState(draft.imageMeta?.altText ?? '')
   const [showRedacted, setShowRedacted] = useState(false)
   const runToken = useRef(0)
+  const autoRunDone = useRef<string | null>(null)
 
   useEffect(() => {
     setResult(audit)
@@ -238,6 +241,26 @@ function DraftPanel({
 
   const editable = ['DRAFT', 'CHANGES_REQUESTED', 'AUDITED'].includes(draft.status)
 
+  // instant client-side scan of whatever is currently in the editor
+  const live = useMemo(
+    () => liveScan(draft.kind === 'text' ? content : '', data?.vault ?? []),
+    [content, data?.vault, draft.kind]
+  )
+
+  // a draft born in the Live Playground auto-runs the full engine on arrival
+  useEffect(() => {
+    if (
+      autoAuditId &&
+      autoAuditId === draft.id &&
+      autoRunDone.current !== draft.id &&
+      draft.status === 'DRAFT'
+    ) {
+      autoRunDone.current = draft.id
+      setAutoAudit(null)
+      void runAudit()
+    }
+  }, [autoAuditId, draft.id, draft.status])
+
   return (
     <div className="space-y-4">
       {/* header */}
@@ -290,13 +313,20 @@ function DraftPanel({
               {content.trim().split(/\s+/).filter(Boolean).length} words
             </span>
           </div>
-          <Textarea
+          <LiveTextarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={setContent}
+            hits={live.hits}
             disabled={!editable || running}
-            className="min-h-[220px] font-mono text-[13px] leading-relaxed"
+            minHeightClass="min-h-[220px]"
             placeholder="Paste the campaign copy…"
           />
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2.5">
+            <LiveStatusStrip counts={live.counts} total={live.total} />
+            <span className="shrink-0 text-[10.5px] text-zinc-400">
+              live scan · deterministic · in-browser
+            </span>
+          </div>
         </div>
       ) : (
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -632,7 +662,7 @@ export function FindingCard({
               )}
               {typeof m.ratio === 'number' && finding.pillar === 'accessibility' && (
                 <span className="rounded-md bg-rose-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-rose-700">
-                  CR {m.ratio}:1 / req {m.required}:1
+                  CR {m.ratio}:1 / req {String(m.required)}:1
                 </span>
               )}
             </div>

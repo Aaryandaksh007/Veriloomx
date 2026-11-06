@@ -41,11 +41,13 @@ interface AppState {
   view: View
   role: Role
   selectedDraftId: string | null
+  autoAuditId: string | null // freshly created draft → Audit Studio auto-runs the engine
   data: BootstrapData | null
   loading: boolean
   setView: (v: View) => void
   setRole: (r: Role) => void
   selectDraft: (id: string | null, view?: View) => void
+  setAutoAudit: (id: string | null) => void
   setData: (d: BootstrapData) => void
   refresh: () => Promise<void>
 }
@@ -56,12 +58,14 @@ export const useApp = create<AppState>()(
       view: 'dashboard',
       role: 'creator',
       selectedDraftId: null,
+      autoAuditId: null,
       data: null,
       loading: false,
       setView: (v) => set({ view: v }),
       setRole: (r) => set({ role: r }),
       selectDraft: (id, view) =>
         set((s) => ({ selectedDraftId: id, view: view ?? s.view })),
+      setAutoAudit: (id) => set({ autoAuditId: id }),
       setData: (d) => set({ data: d }),
       refresh: async () => {
         set({ loading: true })

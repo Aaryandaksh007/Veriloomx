@@ -147,7 +147,7 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
   const t0 = Date.now()
 
   // ── Stage B: parallel pillar execution ──────────────────────
-  const [terminologyRes, claimsScanRes, toneRes, claimsRes, visualRes, a11yRes] =
+  const [terminologyRes, claimsScanRes, toneRes, claimsRes, visualRes] =
     await Promise.allSettled([
       // Pillar 2 — deterministic terminology
       (async () => {

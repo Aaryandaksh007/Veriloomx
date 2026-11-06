@@ -182,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* sticky footer status bar */}
-        <footer className="mt-auto shrink-0 border-t border-zinc-200 bg-white print:hidden">
+        <footer className="mt-auto shrink-0 border-t border-zinc-200 bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] print:hidden">
           <div className="mx-auto flex w-full max-w-[1380px] flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:px-6 lg:px-8">
             <p className="flex items-center gap-2 text-[11px] text-zinc-500">
               <span className="relative flex h-2 w-2">
@@ -193,7 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="text-zinc-300">·</span>
               Vault: <span className="font-semibold text-zinc-700">{clauseCount} clauses</span>
               <span className="text-zinc-300">·</span>
-              {draftCount} drafts
+              <span className="whitespace-nowrap">{draftCount} drafts</span>
               {loading && <span className="text-emerald-600">· syncing…</span>}
             </p>
             <p className="text-[11px] text-zinc-400">

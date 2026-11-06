@@ -250,7 +250,7 @@ function VaultCard({
       <h3 className="mt-2.5 text-sm font-bold leading-snug text-zinc-900">{item.title}</h3>
       <p className="mt-1 flex-1 text-xs leading-relaxed text-zinc-500">{item.content}</p>
 
-      {(extra.hex || extra.replaceWith || extra.term || extra.match) && (
+      {Boolean(extra.hex || extra.replaceWith || extra.term || extra.match) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
           {typeof extra.hex === 'string' && (
             <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono font-semibold text-zinc-700">
