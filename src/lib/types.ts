@@ -95,12 +95,16 @@ export interface Finding {
 export interface PillarSummary {
   pillar: Pillar
   engine: EngineKind
-  status: 'pass' | 'warn' | 'fail' | 'skipped'
+  status: 'pass' | 'warn' | 'fail' | 'skipped' | 'error'
   critical: number
   warning: number
   info: number
   durationMs: number
   detail: string
+}
+
+export function auditHasEngineErrors(pillars: readonly PillarSummary[]): boolean {
+  return pillars.some((pillar) => pillar.status === 'error')
 }
 
 export interface AuditResult {

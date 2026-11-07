@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { db } from '@/lib/db'
 import { serialiseAudit } from '@/lib/audit/engine'
-import type { CertificateData, Finding, FindingActionDTO } from '@/lib/types'
+import { auditHasEngineErrors, type CertificateData, type Finding, type FindingActionDTO, type PillarSummary } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +34,12 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     include: { actions: true },
   })
   if (!audit) return NextResponse.json({ error: 'Audit not found' }, { status: 404 })
+  if (auditHasEngineErrors(JSON.parse(audit.pillarSummaries) as PillarSummary[])) {
+    return NextResponse.json(
+      { error: 'This certificate cannot be issued because one or more audit checks failed.' },
+      { status: 409 }
+    )
+  }
 
   const findings = JSON.parse(audit.findings) as Finding[]
   const auditResult = serialiseAudit(audit, draftId)

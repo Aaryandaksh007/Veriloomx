@@ -28,6 +28,7 @@ import { useApp, roleIdentity } from '@/lib/store'
 import { liveScan } from '@/lib/live-check'
 import { LiveTextarea, LiveStatusStrip } from './live-editor'
 import {
+  auditHasEngineErrors,
   PILLAR_META,
   type AuditResult,
   type DraftDTO,
@@ -466,8 +467,11 @@ function AuditResultPanel({
   showRedacted: boolean
   onToggleRedacted: () => void
 }) {
-  const verdict =
-    result.score >= 85
+  const incomplete = auditHasEngineErrors(result.pillars)
+  const failedPillars = result.pillars.filter((pillar) => pillar.status === 'error')
+  const verdict = incomplete
+    ? { text: 'Audit incomplete — rerun checks', cls: 'text-clay-600' }
+    : result.score >= 85
       ? { text: 'Ready to publish', cls: 'text-olive-600' }
       : result.score >= 60
         ? { text: 'Minor fixes recommended', cls: 'text-ochre-600' }
@@ -515,12 +519,33 @@ function AuditResultPanel({
             <span className="text-[11px] text-stone-400">
               Audit of v{result.version} · {new Date(result.createdAt).toLocaleString()}
             </span>
-            <Button onClick={onGoRemediate} className="bg-ink hover:bg-stone-800">
+            <Button
+              onClick={onGoRemediate}
+              disabled={incomplete}
+              title={incomplete ? 'Rerun the failed checks before remediation or review.' : undefined}
+              className="bg-ink hover:bg-stone-800"
+            >
               <WandSparkles className="mr-2 h-4 w-4" />
-              Open Remediation Studio
+              {incomplete ? 'Rerun failed checks before remediation' : 'Open Remediation Studio'}
             </Button>
           </div>
         </div>
+
+        {incomplete && (
+          <div
+            role="alert"
+            className="rounded-xl border border-clay-300 bg-clay-50 p-4 text-sm text-clay-800"
+          >
+            <p className="font-semibold">This audit is incomplete and is not a clean result.</p>
+            <ul className="mt-1 list-inside list-disc text-xs">
+              {failedPillars.map((pillar) => (
+                <li key={pillar.pillar}>
+                  {PILLAR_META[pillar.pillar].short}: {pillar.detail}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* pillar grid */}
         <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
@@ -571,11 +596,19 @@ function AuditResultPanel({
           Findings ({result.findings.length})
         </h3>
         <div className="space-y-2.5">
-          {result.findings.length === 0 && (
+          {result.findings.length === 0 && !incomplete && (
             <div className="rounded-xl border border-olive-200 bg-olive-50/50 p-6 text-center">
               <CheckCircle2 className="mx-auto h-8 w-8 text-olive-500" />
               <p className="mt-2 text-sm font-semibold text-olive-800">
-                Clean across all six pillars.
+                Clean across all applicable checks.
+              </p>
+            </div>
+          )}
+          {result.findings.length === 0 && incomplete && (
+            <div className="rounded-xl border border-clay-200 bg-clay-50/50 p-6 text-center">
+              <XCircle className="mx-auto h-8 w-8 text-clay-500" />
+              <p className="mt-2 text-sm font-semibold text-clay-800">
+                No findings were produced because one or more checks failed.
               </p>
             </div>
           )}
@@ -615,7 +648,9 @@ function PillarCard({ summary }: { summary: PillarSummary }) {
         <EngineChip engine={summary.engine} />
       </div>
       <p className="mt-1.5 text-[10.5px] leading-snug text-stone-400">
-        {summary.status === 'skipped'
+        {summary.status === 'error'
+          ? 'CHECK FAILED'
+          : summary.status === 'skipped'
           ? meta.desc
           : `${summary.critical}C · ${summary.warning}W · ${summary.info}I · ${summary.durationMs}ms`}
       </p>

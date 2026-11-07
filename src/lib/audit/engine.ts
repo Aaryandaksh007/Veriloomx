@@ -90,7 +90,8 @@ function pillarSummary(
   findings: Finding[],
   durationMs: number,
   detail: string,
-  skipped = false
+  skipped = false,
+  failed = false
 ): PillarSummary {
   const critical = findings.filter((f) => f.severity === 'critical').length
   const warning = findings.filter((f) => f.severity === 'warning').length
@@ -100,11 +101,13 @@ function pillarSummary(
     engine: PILLAR_META[pillar].engine,
     status: skipped
       ? 'skipped'
-      : critical > 0
-        ? 'fail'
-        : warning > 0
-          ? 'warn'
-          : 'pass',
+      : failed
+        ? 'error'
+        : critical > 0
+          ? 'fail'
+          : warning > 0
+            ? 'warn'
+            : 'pass',
     critical,
     warning,
     info,
@@ -203,8 +206,10 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             res.findings,
             Date.now() - s,
             res.parseError
-              ? 'AI response unparseable — deterministic checks only (no flags raised)'
-              : `${res.findings.length} voice flags grounded in Vault citations${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`
+              ? 'AI response could not be verified — rerun this audit before review'
+              : `${res.findings.length} voice flags grounded in Vault citations${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`,
+            false,
+            res.parseError
           ),
         }
       })(),
@@ -228,8 +233,10 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             res.findings,
             Date.now() - s,
             res.parseError
-              ? 'AI response unparseable — deterministic figure scan only'
-              : `Atomic-claim verification complete${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`
+              ? 'AI response could not be verified — deterministic figure scan only; rerun before review'
+              : `Atomic-claim verification complete${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`,
+            false,
+            res.parseError
           ),
         }
       })(),
@@ -258,10 +265,24 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
         // Pillar 5 — VLM sampling + deterministic WCAG math
         const a11yRule = vault.find((v) => v.clauseId === 'VL-A11Y-001') ?? null
         const logoRule = vault.find((v) => v.type === 'LOGO') ?? null
-        const vlm = await runImageVlm(draft.imageData, { a11y: a11yRule, logo: logoRule })
-        ledger.push(...vlm.ledger)
+        let vlm: Awaited<ReturnType<typeof runImageVlm>> | null = null
+        try {
+          vlm = await runImageVlm(draft.imageData, { a11y: a11yRule, logo: logoRule })
+          ledger.push(...vlm.ledger)
+        } catch (error) {
+          console.error('[audit] image vision engine failure:', error)
+        }
+        const visionAvailable = vlm !== null && !vlm.parseError
+        const visionResult = vlm ?? {
+          contrastFindings: [],
+          logoFindings: [],
+          altTextSuggestion: null,
+          extractedTexts: [],
+          ledger: [],
+          parseError: true,
+        }
 
-        const a11yFindings: Finding[] = [...vlm.contrastFindings]
+        const a11yFindings: Finding[] = [...visionResult.contrastFindings]
 
         // alt-text check (deterministic, cited to A11Y rule)
         const altText = (imageMeta?.altText ?? '').trim()
@@ -278,21 +299,21 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             clauseId: a11yRule.clauseId,
             clauseQuote: a11yRule.content,
             clauseTitle: a11yRule.title,
-            suggestion: vlm.altTextSuggestion ? `"${vlm.altTextSuggestion}"` : null,
-            suggestionSource: vlm.altTextSuggestion ? 'ai' : null,
+            suggestion: visionResult.altTextSuggestion ? `"${visionResult.altTextSuggestion}"` : null,
+            suggestionSource: visionResult.altTextSuggestion ? 'ai' : null,
             meta: { kind: 'alt-text' },
           })
         }
 
         // Pillar 6 for images — PII on VLM-extracted text + alt text
         const imageConf = runConfidentialityImage(
-          vlm.extractedTexts,
+          visionResult.extractedTexts,
           altText,
           vault
         )
 
         // logo findings live in the visual pillar
-        const visualAll = [...visualFindings, ...vlm.logoFindings]
+        const visualAll = [...visualFindings, ...visionResult.logoFindings]
 
         return {
           visualFindings: visualAll,
@@ -301,13 +322,21 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             'visual',
             visualAll,
             vs,
-            `ΔE2000 palette distance on ${palette.length} extracted swatches vs ${colorItems.length} brand tokens${vlm.logoFindings.length ? ' · logo inspection via VLM' : ''}`
+            visionAvailable
+              ? `ΔE2000 palette distance on ${palette.length} extracted swatches vs ${colorItems.length} brand tokens${visionResult.logoFindings.length ? ' · logo inspection via VLM' : ''}`
+              : `Palette checked with ΔE2000; logo inspection unavailable — rerun before review`,
+            false,
+            !visionAvailable && Boolean(logoRule)
           ),
           a11ySummary: pillarSummary(
             'accessibility',
             a11yFindings,
             Date.now() - s,
-            `${vlm.extractedTexts.length} text regions sampled by VLM · contrast computed with exact WCAG 2.1 luminance math${vlm.parseError ? ' (VLM unparseable — alt-text check only)' : ''}`
+            visionAvailable
+              ? `${visionResult.extractedTexts.length} text regions sampled by VLM · contrast computed with exact WCAG 2.1 luminance math`
+              : 'Image text and contrast could not be verified — rerun before review',
+            false,
+            !visionAvailable
           ),
           imageConf,
           confSummary: pillarSummary(
@@ -316,9 +345,13 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             Date.now() - s,
             imageConf.length
               ? `${imageConf.length} sensitive token(s) detected in asset text`
-              : 'No sensitive tokens detected in asset text or alt text'
+              : visionAvailable
+                ? 'No sensitive tokens detected in asset text or alt text'
+                : 'Alt text checked; image text could not be scanned — rerun before review',
+            false,
+            !visionAvailable
           ),
-          altSuggestion: vlm.altTextSuggestion,
+          altSuggestion: visionResult.altTextSuggestion,
         }
       })(),
     ])
@@ -340,27 +373,27 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
 
   const terminology = unwrap(terminologyRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('terminology', [], 0, 'Engine error — skipped', true),
+    summary: pillarSummary('terminology', [], 0, 'Engine error — rerun before review', false, true),
   })
   const claimsScan = unwrap(claimsScanRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('claims', [], 0, 'Engine error', true),
+    summary: pillarSummary('claims', [], 0, 'Deterministic claims scan failed — rerun before review', false, true),
   })
   const tone = unwrap(toneRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('tone', [], 0, 'AI engine failed — see server logs', true),
+    summary: pillarSummary('tone', [], 0, 'AI engine failed — rerun before review', false, true),
   })
   const claimsRag = unwrap(claimsRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('claims', [], 0, 'AI engine failed — see server logs', true),
+    summary: pillarSummary('claims', [], 0, 'AI verification failed — deterministic scan only; rerun before review', false, true),
   })
   const imagePipeline = unwrap(visualRes, {
     visualFindings: [] as Finding[],
     a11yFindings: [] as Finding[],
-    visualSummary: pillarSummary('visual', [], 0, 'Engine error', true),
-    a11ySummary: pillarSummary('accessibility', [], 0, 'Engine error', true),
+    visualSummary: pillarSummary('visual', [], 0, 'Image analysis failed — rerun before review', false, true),
+    a11ySummary: pillarSummary('accessibility', [], 0, 'Image analysis failed — rerun before review', false, true),
     imageConf: [] as Finding[],
-    confSummary: pillarSummary('confidentiality', [], 0, 'Engine error', true),
+    confSummary: pillarSummary('confidentiality', [], 0, 'Image analysis failed — rerun before review', false, true),
     altSuggestion: null as string | null,
   })
 
@@ -400,7 +433,14 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
         warning: claimsRag.summary.warning,
         info: claimsRag.summary.info,
         durationMs: claimsScan.summary.durationMs + claimsRag.summary.durationMs,
-        detail: `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
+        status:
+          claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
+            ? 'error'
+            : claimsRag.summary.status,
+        detail:
+          claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
+            ? 'Claims verification incomplete — rerun before review'
+            : `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
       },
       pillarSummary('visual', [], 0, 'Skipped — text-only draft', true),
       pillarSummary('accessibility', [], 0, 'Skipped — text-only draft', true),
@@ -430,8 +470,8 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
       warning,
       info,
       status:
-        p.status === 'skipped'
-          ? 'skipped'
+        p.status === 'skipped' || p.status === 'error'
+          ? p.status
           : critical > 0
             ? 'fail'
             : warning > 0

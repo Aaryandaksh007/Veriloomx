@@ -28,6 +28,7 @@ import type {
   Finding,
   FindingActionDTO,
 } from '@/lib/types'
+import { auditHasEngineErrors } from '@/lib/types'
 import { PILLAR_META } from '@/lib/types'
 import { CitationCard, SeverityChip, StatusChip, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
@@ -77,7 +78,8 @@ export function RemediationView() {
   )
   const findings = audit?.findings ?? []
   const resolved = findings.filter((f) => actionsBy.has(f.key)).length
-  const allResolved = findings.length > 0 && resolved === findings.length
+  const auditIncomplete = audit ? auditHasEngineErrors(audit.pillars) : false
+  const allResolved = resolved === findings.length
 
   const reload = async () => {
     if (!selected) return
@@ -168,7 +170,14 @@ export function RemediationView() {
                   <RemediateButton
                     draftId={selected.id}
                     auditId={audit.id}
-                    disabled={!allResolved}
+                    disabled={!allResolved || auditIncomplete}
+                    disabledReason={
+                      auditIncomplete
+                        ? 'Audit incomplete — rerun the audit'
+                        : !allResolved
+                          ? 'Resolve all findings first'
+                          : undefined
+                    }
                     onDone={reload}
                     actor={roleIdentity(role).name}
                   />
@@ -663,12 +672,14 @@ function RemediateButton({
   draftId,
   auditId,
   disabled,
+  disabledReason,
   onDone,
   actor,
 }: {
   draftId: string
   auditId: string
   disabled: boolean
+  disabledReason?: string
   onDone: () => Promise<void>
   actor: string
 }) {
@@ -702,7 +713,7 @@ function RemediateButton({
       }}
     >
       {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-      {disabled ? 'Resolve all findings first' : 'Create remediated version'}
+      {disabled ? disabledReason ?? 'Resolve all findings first' : 'Create remediated version'}
     </Button>
   )
 }

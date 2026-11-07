@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import type { Finding } from '@/lib/types'
+import { auditHasEngineErrors, type Finding, type PillarSummary } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +94,19 @@ export async function POST(req: NextRequest) {
   if (!audit) {
     return NextResponse.json(
       { error: 'No audit exists for the current version — run the 6-pillar audit first.' },
+      { status: 409 }
+    )
+  }
+
+  if (audit.version !== draft.version) {
+    return NextResponse.json(
+      { error: 'The latest audit does not match the current draft version. Rerun the audit before approval.' },
+      { status: 409 }
+    )
+  }
+  if (auditHasEngineErrors(JSON.parse(audit.pillarSummaries) as PillarSummary[])) {
+    return NextResponse.json(
+      { error: 'Approval is blocked because one or more audit checks failed. Rerun the audit before sign-off.' },
       { status: 409 }
     )
   }

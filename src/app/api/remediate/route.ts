@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { replaceQuote } from '@/lib/diff'
-import type { Finding } from '@/lib/types'
+import { auditHasEngineErrors, type Finding, type PillarSummary } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +24,19 @@ export async function POST(req: NextRequest) {
   if (!draft || !audit) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const findings = JSON.parse(audit.findings) as Finding[]
+  const pillars = JSON.parse(audit.pillarSummaries) as PillarSummary[]
+  if (audit.version !== draft.version) {
+    return NextResponse.json(
+      { error: 'This audit is for an older draft version. Run a fresh audit before remediation.' },
+      { status: 409 }
+    )
+  }
+  if (auditHasEngineErrors(pillars)) {
+    return NextResponse.json(
+      { error: 'This audit is incomplete because one or more checks failed. Rerun the audit before remediation.' },
+      { status: 409 }
+    )
+  }
   const actionsBy = new Map(audit.actions.map((a) => [a.findingKey, a]))
 
   const unresolved = findings.filter((f) => !actionsBy.has(f.key))

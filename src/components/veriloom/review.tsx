@@ -4,8 +4,7 @@
 // VeriLoom AI — Role-Based Review & Approval
 // Simulated role gates, version diffs, threaded comments, state machine.
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import {
   ClipboardCheck,
   Send,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react'
 import { useApp, roleIdentity, type View } from '@/lib/store'
 import { ROLE_META, type CommentDTO, type DraftDTO, type DraftVersionDTO } from '@/lib/types'
-import { wordDiff } from '@/lib/diff'
 import { StatusChip, timeAgo, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -111,6 +109,14 @@ export function ReviewView() {
 
   const identity = roleIdentity(role)
   const draft = detail?.draft ?? selected
+  const previousVersion =
+    detail && detail.versions.length > 1
+      ? detail.versions[detail.versions.length - 2]
+      : null
+  const currentVersion =
+    detail && detail.versions.length > 1
+      ? detail.versions[detail.versions.length - 1]
+      : null
 
   return (
     <div className="space-y-5">
@@ -207,16 +213,13 @@ export function ReviewView() {
             </div>
 
             {/* version diff */}
-            {detail && detail.versions.length > 1 && draft.kind === 'text' && (
+            {previousVersion && currentVersion && draft.kind === 'text' && (
               <div className="rounded-xl border border-line bg-paper p-4">
                 <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
                   <History className="h-3.5 w-3.5" />
-                  Version diff · v1 → v{draft.version}
+                  Version comparison · v{previousVersion.version} → v{currentVersion.version}
                 </p>
-                <DiffView
-                  a={detail.versions[0].content}
-                  b={detail.versions[detail.versions.length - 1].content}
-                />
+                <VersionCompare previous={previousVersion} current={currentVersion} />
               </div>
             )}
 
@@ -426,33 +429,31 @@ function RbacButton({
   )
 }
 
-function DiffView({ a, b }: { a: string; b: string }) {
-  const tokens = useMemo(() => wordDiff(a, b), [a, b])
+function VersionCompare({
+  previous,
+  current,
+}: {
+  previous: DraftVersionDTO
+  current: DraftVersionDTO
+}) {
   return (
-    <div className="rounded-lg bg-parchment p-3 text-[13px] leading-[1.9] text-stone-800">
-      {tokens.map((t, i) =>
-        t.op === 'same' ? (
-          <span key={i}>{t.text}</span>
-        ) : t.op === 'remove' ? (
-          <motion.span
-            key={i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="rounded bg-clay-100 px-0.5 text-clay-700 line-through decoration-clay-400"
-          >
-            {t.text}
-          </motion.span>
-        ) : (
-          <motion.span
-            key={i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="rounded bg-olive-100 px-0.5 font-semibold text-olive-800"
-          >
-            {t.text}
-          </motion.span>
-        )
-      )}
+    <div className="grid gap-3 md:grid-cols-2">
+      <div className="min-w-0 rounded-lg border border-clay-200 bg-clay-50/50 p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-clay-700">
+          Previous · v{previous.version}
+        </p>
+        <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
+          {previous.content || 'No text content'}
+        </p>
+      </div>
+      <div className="min-w-0 rounded-lg border border-olive-200 bg-olive-50/50 p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-olive-700">
+          Current · v{current.version}
+        </p>
+        <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
+          {current.content || 'No text content'}
+        </p>
+      </div>
     </div>
   )
 }
