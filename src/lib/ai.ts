@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────
-// VeriLoom AI — z-ai SDK wrapper (server-only)
+// VeriLoom AI — server-side Gemini API wrapper.
 // Structured JSON completions + vision analysis, with a
 // transparent AI-usage ledger for every call.
 // ─────────────────────────────────────────────────────────────
 import 'server-only'
-import ZAI from 'z-ai-web-dev-sdk'
+import { setTimeout as delay } from 'node:timers/promises'
 
 export interface LedgerEntry {
   model: string
@@ -12,18 +12,99 @@ export interface LedgerEntry {
   ts: string
 }
 
-let zaiPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>
+    }
+  }>
+}
 
-async function getZai() {
-  if (!zaiPromise) zaiPromise = ZAI.create()
-  return zaiPromise
+interface GeminiPart {
+  text?: string
+  inlineData?: { mimeType: string; data: string }
+}
+
+function getModel(vision = false): string {
+  return vision
+    ? process.env.GEMINI_VISION_MODEL ?? process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
+    : process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
+}
+
+async function complete(
+  parts: GeminiPart[],
+  options: { systemPrompt?: string; vision?: boolean; json?: boolean } = {}
+): Promise<{ text: string; model: string }> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error('Missing GEMINI_API_KEY. Add it to .env.local and restart the app.')
+  }
+
+  const model = getModel(options.vision)
+  let response: Response | undefined
+  const maxAttempts = 2
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'x-goog-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(40_000),
+          body: JSON.stringify({
+            ...(options.systemPrompt
+              ? { systemInstruction: { parts: [{ text: options.systemPrompt }] } }
+              : {}),
+            contents: [{ role: 'user', parts }],
+            ...(options.json
+              ? { generationConfig: { responseMimeType: 'application/json' } }
+              : {}),
+          }),
+        }
+      )
+    } catch (error) {
+      if (attempt === maxAttempts - 1) {
+        throw new Error(
+          `Gemini network request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+          { cause: error }
+        )
+      }
+      await delay(500 * 2 ** attempt)
+      continue
+    }
+
+    if (
+      response.ok ||
+      attempt === maxAttempts - 1 ||
+      ![429, 500, 502, 503, 504].includes(response.status)
+    ) {
+      break
+    }
+    await response.body?.cancel()
+    await delay(500 * 2 ** attempt)
+  }
+
+  if (!response) throw new Error('Gemini request ended without a response.')
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(`Gemini API request failed (${response.status}): ${detail.slice(0, 500)}`)
+  }
+
+  const result = (await response.json()) as GeminiResponse
+  const text = result.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text ?? '')
+    .join('') ?? ''
+  return { text, model }
 }
 
 /** Extract the first JSON value from an LLM response. */
 export function extractJson<T>(raw: string): T | null {
   if (!raw) return null
   let text = raw.trim()
-  // strip markdown fences
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
   const firstObj = text.indexOf('{')
   const firstArr = text.indexOf('[')
@@ -70,28 +151,20 @@ export interface ChatResult<T> {
   ledger: LedgerEntry
 }
 
-/**
- * Chat completion constrained to a JSON response.
- * `ledgerPurpose` is recorded in the transparent AI ledger.
- */
+/** Chat completion constrained to a JSON response. */
 export async function chatJson<T>(
   systemPrompt: string,
   userPrompt: string,
   ledgerPurpose: string
 ): Promise<ChatResult<T>> {
-  const zai = await getZai()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: 'assistant', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    thinking: { type: 'disabled' },
-  })
-  const raw = completion.choices[0]?.message?.content ?? ''
+  const result = await complete(
+    [{ text: userPrompt }],
+    { systemPrompt, json: true }
+  )
   return {
-    data: extractJson<T>(raw),
-    raw,
-    ledger: { model: 'GLM-4.5', purpose: ledgerPurpose, ts: new Date().toISOString() },
+    data: extractJson<T>(result.text),
+    raw: result.text,
+    ledger: { model: result.model, purpose: ledgerPurpose, ts: new Date().toISOString() },
   }
 }
 
@@ -107,25 +180,16 @@ export async function visionJson<T>(
   prompt: string,
   ledgerPurpose: string
 ): Promise<VisionResult<T>> {
-  const zai = await getZai()
-  const completion = await zai.chat.completions.createVision({
-    model: 'glm-4.6v',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: imageDataUrl } },
-        ],
-      },
-    ],
-    thinking: { type: 'disabled' },
-  })
-  const raw = completion.choices?.[0]?.message?.content ?? ''
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/.exec(imageDataUrl)
+  if (!match) throw new Error('Gemini vision requires an image base64 data URL.')
+  const result = await complete(
+    [{ text: prompt }, { inlineData: { mimeType: match[1], data: match[2] } }],
+    { vision: true, json: true }
+  )
   return {
-    data: extractJson<T>(raw),
-    raw,
-    ledger: { model: 'GLM-4.6V', purpose: ledgerPurpose, ts: new Date().toISOString() },
+    data: extractJson<T>(result.text),
+    raw: result.text,
+    ledger: { model: result.model, purpose: ledgerPurpose, ts: new Date().toISOString() },
   }
 }
 
@@ -135,16 +199,9 @@ export async function chatText(
   userPrompt: string,
   ledgerPurpose: string
 ): Promise<{ text: string; ledger: LedgerEntry }> {
-  const zai = await getZai()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: 'assistant', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    thinking: { type: 'disabled' },
-  })
+  const result = await complete([{ text: userPrompt }], { systemPrompt })
   return {
-    text: completion.choices[0]?.message?.content ?? '',
-    ledger: { model: 'GLM-4.5', purpose: ledgerPurpose, ts: new Date().toISOString() },
+    text: result.text,
+    ledger: { model: result.model, purpose: ledgerPurpose, ts: new Date().toISOString() },
   }
 }

@@ -19,15 +19,17 @@ import {
 import { cn } from '@/lib/utils'
 
 interface Failure {
-  id: string
+  id: FailureId
   icon: React.ComponentType<{ className?: string }>
   title: string
   tab: string
   desc: string
   wrong: string
   caught: string
-  clause: string
+  clauses: string[]
 }
+
+export type FailureId = 'facts' | 'visual' | 'tone' | 'a11y'
 
 const FAILURES: Failure[] = [
   {
@@ -37,8 +39,8 @@ const FAILURES: Failure[] = [
     tab: 'Facts & pricing',
     desc: 'Prices, specs and claims drift from the approved source of truth.',
     wrong: 'The launch email says $39/user/month. The approved price is $29.',
-    caught: 'Catches unapproved figures against Vault facts before send.',
-    clause: 'VL-FACT-001',
+    caught: 'Scans each figure against approved Vault facts before send and cites the exact pricing clause.',
+    clauses: ['VL-FACT-001'],
   },
   {
     id: 'visual',
@@ -47,8 +49,8 @@ const FAILURES: Failure[] = [
     tab: 'Off-brand visuals',
     desc: 'Banners ship in colours the brand never approved.',
     wrong: 'The banner ships with generic purple. The brand colour is Loom Coral #F43F5E.',
-    caught: 'Exact CIELAB ΔE colour-distance math flags it before export.',
-    clause: 'VL-COLOR-011',
+    caught: 'Compares the banner palette with Loom Coral using CIELAB ΔE2000 before export.',
+    clauses: ['VL-COLOR-001'],
   },
   {
     id: 'tone',
@@ -57,8 +59,8 @@ const FAILURES: Failure[] = [
     tab: 'Tone & banned words',
     desc: 'Copy slips in words that legal banned or the voice would never use.',
     wrong: '“Revolutionary AI magic” goes live. Legal banned both words last quarter.',
-    caught: 'Deterministic lexicon flags banned terms with one-click fixes.',
-    clause: 'VL-VOICE-004',
+    caught: 'Deterministic lexicon flags both banned words instantly, with the exact rule and a one-click fix.',
+    clauses: ['VL-TERM-001', 'VL-TERM-003'],
   },
   {
     id: 'a11y',
@@ -67,12 +69,16 @@ const FAILURES: Failure[] = [
     tab: 'Accessibility',
     desc: 'Unreadable, non-compliant designs reach real customers.',
     wrong: 'White text on a pale yellow banner — 1.8:1 contrast, unreadable, non-compliant.',
-    caught: 'WCAG 2.1 math verifies every text region, pixel-exact.',
-    clause: 'VL-RULE-031',
+    caught: 'Samples text regions, computes WCAG contrast ratios, and cites the accessibility rule before approval.',
+    clauses: ['VL-A11Y-001'],
   },
 ]
 
-export function ProblemSection() {
+export function ProblemSection({
+  onTryFailure,
+}: {
+  onTryFailure: (failureId: FailureId) => void
+}) {
   const [active, setActive] = useState(0)
   const f = FAILURES[active]
   const Icon = f.icon
@@ -93,10 +99,10 @@ export function ProblemSection() {
           The problem: anyone can publish, nobody double-checks
         </h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-soft">
-          Decentralised teams, agencies and generative AI produce hundreds of
-          assets a week. Brand guidelines live in a 60-page PDF nobody opens
-          under deadline. Switch between the four failure modes that reach
-          production every day:
+          Marketing teams ship dozens of launch emails, banners and landing pages every week.
+          Guidelines sit in PDFs, manual checks are inconsistent, and mistakes are often
+          found only after customers see them. Select a failure mode to see the real check
+          and try it against a demo asset:
         </p>
       </motion.div>
 
@@ -164,8 +170,15 @@ export function ProblemSection() {
                 </h3>
                 <p className="text-xs text-ink-soft">{f.desc}</p>
               </div>
-              <span className="ml-auto hidden rounded-md bg-ink px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-cream sm:inline-flex">
-                {f.clause}
+              <span className="ml-auto flex flex-wrap justify-end gap-1">
+                {f.clauses.map((clause) => (
+                  <span
+                    key={clause}
+                    className="rounded-md bg-ink px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-cream"
+                  >
+                    {clause}
+                  </span>
+                ))}
               </span>
             </div>
 
@@ -173,7 +186,7 @@ export function ProblemSection() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-clay-200/80 bg-clay-50/60 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-clay-700">
-                  What ships today
+                  What slips through manual review
                 </p>
                 <p className="mt-1.5 flex items-start gap-2 text-xs leading-relaxed">
                   <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-clay-100">
@@ -186,7 +199,7 @@ export function ProblemSection() {
               </div>
               <div className="rounded-lg border border-olive-200/80 bg-olive-50/60 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-olive-700">
-                  What VeriLoom does
+                  How VeriLoom catches it before publishing
                 </p>
                 <p className="mt-1.5 flex items-start gap-2 text-xs font-medium leading-relaxed text-olive-800">
                   <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-olive-100">
@@ -195,6 +208,22 @@ export function ProblemSection() {
                   {f.caught}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11px] leading-relaxed text-faint">
+                Static PDFs can&rsquo;t check a draft. Generic AI doesn&rsquo;t know your approved facts.
+                Manual review is easy to miss under deadline.
+              </p>
+              <button
+                type="button"
+                onClick={() => onTryFailure(f.id)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-terra-500 px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-terra-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terra-400/60"
+              >
+                {f.id === 'visual' || f.id === 'a11y'
+                  ? 'Inspect a real banner audit'
+                  : 'Try this copy check'}
+                <span aria-hidden>→</span>
+              </button>
             </div>
           </motion.div>
         </AnimatePresence>

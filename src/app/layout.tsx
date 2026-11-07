@@ -23,7 +23,7 @@ const loraSerif = Lora({
 export const metadata: Metadata = {
   title: "VeriLoom AI — Intelligent Brand Governance & Explainable Compliance",
   description:
-    "Pre-publication multimodal content auditing, citation-grounded remediation, and role-based governance. Built by Team opopopxxnot for the We Code Coders Hackathon.",
+    "Pre-publication content auditing, citation-grounded remediation, and a demo approval workflow. Built by Team opopopxxnot for the We Code Coders Hackathon.",
   keywords: [
     "brand governance",
     "compliance",

@@ -32,7 +32,7 @@ const NAV: { id: View; label: string; icon: React.ComponentType<{ className?: st
   { id: 'vault', label: 'Brand Vault', icon: LibraryBig, hint: 'Single source of truth' },
   { id: 'audit', label: 'Audit Studio', icon: ScanSearch, hint: '6-pillar pre-flight' },
   { id: 'remediation', label: 'Remediation', icon: WandSparkles, hint: 'Explainable fixes' },
-  { id: 'review', label: 'Review & Approval', icon: ClipboardCheck, hint: 'RBAC sign-off' },
+  { id: 'review', label: 'Review & Approval', icon: ClipboardCheck, hint: 'Demo approval workflow' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, hint: 'Blindspot engine' },
   { id: 'certificate', label: 'Certificate', icon: Award, hint: 'Tamper-evident proof' },
 ]
@@ -140,6 +140,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SelectContent>
             </Select>
             <p className="mt-1.5 text-[10px] leading-relaxed text-faint">{ROLE_META[role].desc}</p>
+            <p className="mt-2 border-t border-line pt-2 text-[10px] leading-relaxed text-ochre-700">
+              Demo only: role switching is simulated; no account sign-in is configured.
+            </p>
           </div>
           <p className="flex items-center gap-1.5 px-1 text-[10px] text-faint">
             Team opopopxxnot · We Code Coders
@@ -167,6 +170,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SelectContent>
             </Select>
           </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-faint">
+            Demo only: role switching is simulated; no account sign-in is configured.
+          </p>
           <nav
             className="mt-3 -mb-3 flex gap-4 overflow-x-auto border-b border-line px-1 vl-scroll"
             aria-label="Main navigation"

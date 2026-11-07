@@ -323,6 +323,18 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
       })(),
     ])
 
+  for (const [name, result] of [
+    ['terminology', terminologyRes],
+    ['claims scan', claimsScanRes],
+    ['tone AI', toneRes],
+    ['claims AI', claimsRes],
+    ['image analysis', visualRes],
+  ] as const) {
+    if (result.status === 'rejected') {
+      console.error(`[audit] ${name} engine failure:`, result.reason)
+    }
+  }
+
   const unwrap = <T>(r: PromiseSettledResult<T>, fallback: T): T =>
     r.status === 'fulfilled' ? r.value : fallback
 
@@ -336,11 +348,11 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
   })
   const tone = unwrap(toneRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('tone', [], 0, 'Engine error', true),
+    summary: pillarSummary('tone', [], 0, 'AI engine failed — see server logs', true),
   })
   const claimsRag = unwrap(claimsRes, {
     findings: [] as Finding[],
-    summary: pillarSummary('claims', [], 0, 'Engine error', true),
+    summary: pillarSummary('claims', [], 0, 'AI engine failed — see server logs', true),
   })
   const imagePipeline = unwrap(visualRes, {
     visualFindings: [] as Finding[],

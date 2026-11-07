@@ -6,7 +6,7 @@
 // pipeline board ("continue where you left off"), the live
 // playground, a guided demo, and an interactive workflow rail.
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -25,7 +25,7 @@ import {
 import { useApp, roleIdentity, type View } from '@/lib/store'
 import type { AuditResult, DraftDTO } from '@/lib/types'
 import { AnimatedNumber, EngineChip, StatusChip, timeAgo } from './shared'
-import { ProblemSection } from './problem-section'
+import { ProblemSection, type FailureId } from './problem-section'
 import { LivePlayground } from './live-playground'
 import { DemoChecklist } from './demo-checklist'
 import { Button } from '@/components/ui/button'
@@ -73,21 +73,48 @@ const NEXT_HINT: Record<string, string> = {
   draft: 'Submit it for a 6-pillar audit',
   audit: 'Run the audit in Audit Studio',
   fix: 'Apply the cited fixes in Remediation',
-  review: 'Await role-based sign-off in Review',
+  review: 'Await approval in the demo review flow',
   live: 'Approved — certificate available',
 }
 
 export function DashboardView() {
   const { data, setView, selectDraft, role } = useApp()
+  const [requestedPlaygroundSample, setRequestedPlaygroundSample] = useState<string | null>(null)
+  const clearRequestedPlaygroundSample = useCallback(
+    () => setRequestedPlaygroundSample(null),
+    []
+  )
 
   const audits = data ? Object.values(data.audits) : []
   const totalFindings = audits.reduce((s, a) => s + a.findings.length, 0)
   const totalSuppressed = audits.reduce((s, a) => s + a.suppressed, 0)
   const inFlight = data?.drafts.filter((d) => d.status !== 'APPROVED').length ?? 0
   const demoDraft =
+    data?.drafts.find(
+      (d) => d.title.includes('Pricing update') && d.status !== 'APPROVED'
+    ) ??
     data?.drafts.find((d) => d.title.includes('Press release')) ??
     data?.drafts.find((d) => d.status !== 'APPROVED') ??
     data?.drafts[0]
+
+  const tryFailure = (failureId: FailureId) => {
+    if (failureId === 'facts' || failureId === 'tone') {
+      setRequestedPlaygroundSample(failureId === 'facts' ? 'pricing' : 'hell')
+      document
+        .getElementById('live-playground')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    const banner = data?.drafts.find(
+      (draft) => draft.kind === 'image' && draft.title.toLowerCase().includes('banner')
+    )
+    if (banner) {
+      selectDraft(banner.id, 'audit')
+    } else {
+      setView('audit')
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -118,22 +145,25 @@ export function DashboardView() {
         }}
       />
 
-      {/* ── 2 · Pipeline board — everything starts here ── */}
-      <PipelineBoard />
+      {/* ── 2 · The concrete problem + proof path ──────── */}
+      <ProblemSection onTryFailure={tryFailure} />
 
-      {/* ── 3 · Live playground ────────────────────────── */}
+      {/* ── 3 · Run the check against real copy ────────── */}
       <div id="live-playground" className="scroll-mt-6">
-        <LivePlayground />
+        <LivePlayground
+          requestedSample={requestedPlaygroundSample}
+          onSampleLoaded={clearRequestedPlaygroundSample}
+        />
       </div>
 
       {/* ── 4 · Guided demo checklist ──────────────────── */}
       <DemoChecklist />
 
-      {/* ── 5 · Interactive workflow rail ──────────────── */}
-      <WorkflowRail />
+      {/* ── 5 · Draft pipeline ────────────────────────── */}
+      <PipelineBoard />
 
-      {/* ── 6 · The problem, in plain language ─────────── */}
-      <ProblemSection />
+      {/* ── 6 · Interactive workflow rail ──────────────── */}
+      <WorkflowRail />
 
       {/* ── 7 · Engine + live activity ─────────────────── */}
       <section className="grid gap-6 lg:grid-cols-5">
@@ -200,10 +230,6 @@ function CommandBar({
   onTryLive: () => void
   onDemoAudit: () => void
 }) {
-  const hour = new Date().getHours()
-  const greeting =
-    hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-
   const stats: { label: string; value: number; hint: string; tone?: string }[] = [
     { label: 'Vault clauses', value: clauses, hint: 'indexed & citable' },
     { label: 'Drafts in flight', value: inFlight, hint: 'under governance' },
@@ -237,13 +263,13 @@ function CommandBar({
               suppressHydrationWarning
               className="mt-2 font-serif text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]"
             >
-              {greeting} — everything starts here.
+              Anyone can publish. Nobody double-checks.
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-              Pick up any draft below, or try the engine on your own words.
-              Every asset passes six brand-governance checks before it ships —{' '}
+              Marketing teams ship dozens of assets every week. VeriLoom checks every draft
+              against approved facts, visual identity and legal restrictions before it goes live —{' '}
               <span className="font-semibold text-ink">
-                explained, cited, approved.
+                with cited evidence, one-click fixes and a certificate for every approval.
               </span>
             </p>
           </div>
@@ -255,7 +281,7 @@ function CommandBar({
               onClick={onTryLive}
             >
               <Zap className="mr-1.5 h-3.5 w-3.5" />
-              Try it live
+              Test risky copy
             </Button>
             <Button
               size="sm"
@@ -264,7 +290,7 @@ function CommandBar({
               onClick={onDemoAudit}
             >
               <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
-              Run demo audit
+              See a real audit
             </Button>
           </div>
         </div>
@@ -296,7 +322,7 @@ function CommandBar({
       {/* hairline role bar */}
       <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-2.5 sm:px-7">
         <p className="truncate text-[11px] text-ink-soft">
-          Viewing as <span className="font-semibold text-ink">{roleLabel}</span> — switch the acting role to watch RBAC permissions change live.
+          Viewing as <span className="font-semibold text-ink">{roleLabel}</span> — switch the demo role to preview how approval permissions change.
         </p>
       </div>
     </motion.section>
@@ -566,7 +592,7 @@ const STEPS: {
     n: 5,
     title: 'Role-Based Sign-Off',
     actor: 'Manager → Reviewer',
-    desc: 'Side-by-side diffs, threaded comments, RBAC state machine, formal approval. Managers pre-screen; only the Authorised Reviewer can sign off.',
+    desc: 'Side-by-side diffs, threaded comments and a simulated approval state machine. Managers pre-screen; only the Authorised Reviewer role can sign off.',
     view: 'review',
   },
   {

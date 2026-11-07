@@ -7,7 +7,7 @@
 // deterministic core flag violations AS YOU TYPE — then send it
 // to the full 6-pillar engine with one click.
 // ─────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -96,7 +96,13 @@ Try it free for 14 days — no credit card needed. Inkloom works with Figma, Not
   },
 ]
 
-export function LivePlayground() {
+export function LivePlayground({
+  requestedSample,
+  onSampleLoaded,
+}: {
+  requestedSample: string | null
+  onSampleLoaded: () => void
+}) {
   const { data, refresh, role, selectDraft, setAutoAudit } = useApp()
   const [text, setText] = useState('')
   const [activeSample, setActiveSample] = useState<string | null>(null)
@@ -108,13 +114,19 @@ export function LivePlayground() {
 
   const words = text.trim().length === 0 ? 0 : text.trim().split(/\s+/).length
 
-  const loadSample = (id: string) => {
+  const loadSample = useCallback((id: string) => {
     const s = SAMPLES.find((x) => x.id === id)
     if (!s) return
     setText(s.text)
     setActiveSample(id)
     setShowRedacted(false)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!requestedSample) return
+    loadSample(requestedSample)
+    onSampleLoaded()
+  }, [requestedSample, onSampleLoaded, loadSample])
 
   const runFullAudit = async () => {
     if (!text.trim() || busy) return

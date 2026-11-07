@@ -2,7 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────
 // VeriLoom AI — Role-Based Review & Approval
-// RBAC gates, version diffs, threaded comments, state machine.
+// Simulated role gates, version diffs, threaded comments, state machine.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -117,7 +117,7 @@ export function ReviewView() {
       <ViewHeader
         crumb="Review & Approval"
         title="Review & Approval"
-        subtitle="Side-by-side diffs, threaded comments and the RBAC state machine — managers pre-screen, only the Authorised Reviewer signs off."
+        subtitle="Side-by-side diffs, threaded comments and a simulated approval workflow — managers pre-screen, only the Authorised Reviewer role can sign off."
       />
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
       {/* draft list */}
@@ -244,7 +244,7 @@ export function ReviewView() {
               )}
             </div>
 
-            {/* RBAC actions */}
+            {/* Demo role actions */}
             <div className="rounded-xl border border-line bg-ink p-4 text-cream">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                 Sign-off console — you are {identity.name} ({ROLE_META[role].label})
@@ -404,7 +404,7 @@ function RbacButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      title={allowed ? desc : `RBAC — switch role to use this action`}
+      title={allowed ? desc : 'Demo workflow — switch the acting role to use this action'}
       className={cn(
         'group flex min-w-[210px] flex-1 items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-left transition-all',
         disabled && 'cursor-not-allowed opacity-45',

@@ -224,23 +224,49 @@ export function liveScan(text: string, vault: VaultItemDTO[]): LiveScanResult {
     items.find((i) => i.clauseId === 'VL-RULE-001') ??
     items.find((i) => i.type === 'RULE' && /figure/i.test(i.title)) ??
     null
+  const factItems = items.filter((item) => item.type === 'FACT')
   const FIGURE_RES = [
     /\$\d[\d,]*(?:\.\d+)?/g, // $39, $1,499.99
     /\b\d+(?:\.\d+)?\s?%/g, // 99.9%, 30 %
     /\b\d{1,3}(?:,\d{3})+\+?/g, // 12,000+, 15,000
+    /\b\d{2,}\+?(?![\d,])/g, // 90, 15,000+, 2025
     /\b\d+[-\s\u00A0]?days?\b/gi, // 14-day, 30 days
   ]
   for (const re of FIGURE_RES) {
     matchAll(re, (m) => {
       const cand = normFigure(m[0])
       if (approved.has(cand)) return
+      const contextStart = Math.max(
+        text.lastIndexOf('.', m.index),
+        text.lastIndexOf('!', m.index),
+        text.lastIndexOf('?', m.index)
+      )
+      const contextEndCandidates = [
+        text.indexOf('.', m.index + m[0].length),
+        text.indexOf('!', m.index + m[0].length),
+        text.indexOf('?', m.index + m[0].length),
+      ].filter((index) => index !== -1)
+      const contextEnd = contextEndCandidates.length
+        ? Math.min(...contextEndCandidates)
+        : text.length
+      const context = text.slice(contextStart + 1, contextEnd).toLowerCase()
+      const relevantFact = m[0].startsWith('$') && /\b(price|pricing|plans?|costs?)\b/.test(context)
+        ? factItems.find((item) => /\b(price|pricing|plans?|costs?)\b|\$/i.test(`${item.title} ${item.content}`))
+        : /\bday(?:s)?\b/i.test(m[0]) && /\btrial\b/.test(context)
+          ? factItems.find((item) => /\btrial\b/i.test(`${item.title} ${item.content}`))
+          : /%/.test(m[0]) && /\b(uptime|sla|availability)\b/.test(context)
+            ? factItems.find((item) => /\b(uptime|sla|availability)\b/i.test(`${item.title} ${item.content}`))
+            : /\bteams?|countries|customers?\b/.test(context)
+              ? factItems.find((item) => /\bteams?|countries|customers?\b/i.test(`${item.title} ${item.content}`))
+              : null
+      const citation = relevantFact ?? figureRule
       add(
         'figure',
         m[0],
         m.index,
         m.index + m[0].length,
-        figureRule?.clauseId ?? 'VL-RULE-001',
-        figureRule?.title ?? 'Every figure must be verifiable',
+        citation?.clauseId ?? 'VL-RULE-001',
+        citation?.title ?? 'Every figure must be verifiable',
         'Verify against an approved Vault fact or remove'
       )
     })

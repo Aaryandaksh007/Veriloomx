@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 type ReviewAction = 'submit' | 'request-changes' | 'approve'
 
-const ROLE_ALLOWED: Record<ReviewAction, string[]> = {
+const ACTION_ROLES: Record<ReviewAction, string[]> = {
   submit: ['creator'],
   'request-changes': ['manager'],
   approve: ['reviewer'],
@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
   if (!draftId || !['submit', 'request-changes', 'approve'].includes(action)) {
     return NextResponse.json({ error: 'draftId and a valid action are required' }, { status: 400 })
   }
-  if (!ROLE_ALLOWED[action].includes(role)) {
+  if (!ACTION_ROLES[action].includes(role)) {
     return NextResponse.json(
       {
-        error: `RBAC: "${action}" is reserved for ${ROLE_ALLOWED[action].join(', ')}. You are acting as ${role}.`,
+        error: `Demo workflow: "${action}" is reserved for ${ACTION_ROLES[action].join(', ')}. You are acting as ${role}.`,
       },
       { status: 403 }
     )

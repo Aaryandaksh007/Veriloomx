@@ -131,7 +131,7 @@ Respond ONLY with JSON:
   const res = await visionJson<VlmImageAnalysis>(
     imageDataUrl,
     prompt,
-    'Visual region sampling for WCAG contrast (GLM-4.5V)'
+    'Visual region sampling for WCAG contrast'
   )
 
   if (!res.data || !Array.isArray(res.data.texts)) {

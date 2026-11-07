@@ -262,7 +262,7 @@ export function AnalyticsView() {
                   <p className="text-[10px] text-faint">{timeAgo(c.ts)}</p>
                 </div>
                 <span className="shrink-0 rounded-md bg-terra-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-terra-700">
-                  {c.model ?? 'GLM-4.5'}
+                  {c.model ?? 'Unknown model'}
                 </span>
               </div>
             ))}
@@ -418,7 +418,7 @@ function BlindspotCard({ rule }: { rule: RuleRow }) {
       ) : (
         <div className="mt-3 space-y-2 rounded-lg border border-ochre-200 bg-paper p-2.5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-ochre-700">
-            Suggested rewrite (GLM-4.5)
+            Suggested rewrite · AI co-pilot
           </p>
           <p className="text-[11.5px] leading-relaxed text-stone-700">
             “{suggestion.suggestedClause}”

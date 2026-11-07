@@ -127,7 +127,27 @@ export function runClaimsScan(
     const after = draftText.slice(m.index + raw.length, m.index + raw.length + 4)
     if (/^\s?AA\b/.test(after)) continue
 
-    const factHint = findConflictingFact(norm, factItems)
+    const contextStart = Math.max(
+      draftText.lastIndexOf('.', m.index),
+      draftText.lastIndexOf('!', m.index),
+      draftText.lastIndexOf('?', m.index)
+    )
+    const contextEndCandidates = [
+      draftText.indexOf('.', m.index + raw.length),
+      draftText.indexOf('!', m.index + raw.length),
+      draftText.indexOf('?', m.index + raw.length),
+    ].filter((index) => index !== -1)
+    const contextEnd = contextEndCandidates.length
+      ? Math.min(...contextEndCandidates)
+      : draftText.length
+    const context = draftText.slice(contextStart + 1, contextEnd).toLowerCase()
+    const factHint =
+      findFactByContext(raw, context, factItems) ??
+      findConflictingFact(raw, factItems)
+    const citedFact = factHint
+      ? factItems.find((item) => item.clauseId === factHint.clauseId)
+      : null
+    const citation = citedFact ?? ruleItem
     findings.push({
       key: `claims-det-${n++}`,
       pillar: 'claims',
@@ -142,12 +162,16 @@ export function runClaimsScan(
             .map((f) => `“${f}”`)
             .join(', ')} under ${factHint.clauseId} — this figure conflicts with the approved value.`
         : `No approved fact in the Vault supports the figure “${raw}”. Every statistic must trace to a verified fact before publication.`,
-      clauseId: ruleItem?.clauseId ?? null,
-      clauseQuote: ruleItem?.content ?? null,
-      clauseTitle: ruleItem?.title ?? null,
+      clauseId: citation?.clauseId ?? null,
+      clauseQuote: citation?.content ?? null,
+      clauseTitle: citation?.title ?? null,
       // literal figure swap only when an approved conflicting value exists
-      suggestion: factHint && isMoneyOrPct ? factHint.figures[0] : null,
-      suggestionSource: factHint && isMoneyOrPct ? 'deterministic' : null,
+      suggestion: factHint && isMoneyOrPct && factHint.figures.length === 1
+        ? factHint.figures[0]
+        : null,
+      suggestionSource: factHint && isMoneyOrPct && factHint.figures.length === 1
+        ? 'deterministic'
+        : null,
       meta: { figure: raw, conflictWith: factHint?.clauseId ?? null },
     })
     if (m.index === FIGURE_RE.lastIndex) FIGURE_RE.lastIndex++
@@ -157,29 +181,34 @@ export function runClaimsScan(
 }
 
 function findConflictingFact(
-  normFigure: string,
+  figure: string,
   factItems: VaultItem[]
 ): { clauseId: string; figures: string[] } | null {
+  const normFigure = normalizeFigure(figure)
+  const isMoney = /^\s*\$/.test(figure)
+  const isPercent = /%/.test(figure)
+
   for (const item of factItems) {
     const extra = vaultExtra(item)
     const figs = Array.isArray(extra.figures) ? (extra.figures as string[]) : []
     const sameKind = figs.filter((f) => {
-      const nf = normalizeFigure(String(f))
-      const bothMoney = normFigure.startsWith('$') === nf.startsWith('$')
-      const bothPct = normFigure.endsWith('%') === nf.endsWith('%')
+      const fact = String(f)
+      const bothMoney = isMoney === /^\s*\$/.test(fact)
+      const bothPct = isPercent === /%/.test(fact)
       return bothMoney && bothPct
     })
     if (sameKind.length === 0) continue
     const isPricing =
       /pric|cost|plan|\$/i.test(item.title + item.content) &&
-      normFigure.startsWith('$')
+      isMoney
     const isTrial =
       /trial/i.test(item.title + item.content) && /\d+day/.test(normFigure)
     if (isPricing || isTrial) {
       return { clauseId: item.clauseId, figures: sameKind }
     }
+
     // generic counts: only a conflict when magnitude is comparable
-    if (!normFigure.startsWith('$') && !normFigure.endsWith('%')) {
+    if (!isMoney && !isPercent) {
       const v = parseInt(normFigure.replace(/\D/g, ''), 10)
       const f = parseInt(normalizeFigure(sameKind[0]).replace(/\D/g, ''), 10)
       if (!isNaN(v) && !isNaN(f) && Math.abs(v - f) <= Math.max(3, f * 2)) {
@@ -188,6 +217,37 @@ function findConflictingFact(
     }
   }
   return null
+}
+
+function findFactByContext(
+  figure: string,
+  context: string,
+  factItems: VaultItem[]
+): { clauseId: string; figures: string[] } | null {
+  const isMoney = /^\s*\$/.test(figure)
+  const isPercent = /%/.test(figure)
+  const relation = isMoney && /\b(price|pricing|plans?|costs?)\b/.test(context)
+    ? /\b(price|pricing|plans?|costs?)\b|\$/i
+    : /\bday(?:s)?\b/i.test(figure) && /\btrial\b/.test(context)
+      ? /\btrial\b/i
+      : isPercent && /\b(uptime|sla|availability)\b/.test(context)
+        ? /\b(uptime|sla|availability)\b/i
+        : /\bteams?|countries|customers?\b/.test(context)
+          ? /\bteams?|countries|customers?\b/i
+          : null
+
+  if (!relation) return null
+  const item = factItems.find((fact) => relation.test(`${fact.title} ${fact.content}`))
+  if (!item) return null
+
+  const extra = vaultExtra(item)
+  const figures = Array.isArray(extra.figures)
+    ? (extra.figures as string[]).filter((value) =>
+        isMoney ? /^\s*\$/.test(value) : isPercent ? /%/.test(value) : !/[$%]/.test(value)
+      )
+    : []
+
+  return figures.length ? { clauseId: item.clauseId, figures } : null
 }
 
 // ── Pillar 6: Confidentiality (local redaction sandbox) ─────

@@ -150,7 +150,7 @@ If there are no violations, respond {"findings":[]}.`
   const res = await chatJson<{ findings: RagRawFinding[] }>(
     system,
     user,
-    'Tone & Voice RAG audit (GLM-4.5, citation-constrained)'
+    'Tone & Voice RAG audit (citation-constrained)'
   )
 
   const rawFindings = res.data?.findings
@@ -211,7 +211,7 @@ If nothing is wrong, respond {"findings":[]}.`
   const res = await chatJson<{ findings: RagRawFinding[] }>(
     system,
     user,
-    'Atomic-claim RAG verification (GLM-4.5, citation-constrained)'
+    'Atomic-claim RAG verification (citation-constrained)'
   )
 
   const rawFindings = res.data?.findings
@@ -302,7 +302,7 @@ Respond ONLY with:
   const res = await chatJson<{ rewrite: string; intentNotes: string }>(
     system,
     user,
-    'Intent-preserving minimal-edit rewrite (GLM-4.5)'
+    'Intent-preserving minimal-edit rewrite'
   )
   return {
     rewrite: res.data?.rewrite?.trim() || null,
@@ -338,7 +338,7 @@ Respond ONLY with:
   const res = await chatJson<{ suggestedClause: string; rationale: string }>(
     system,
     user,
-    'Guideline blind-spot phrasing suggestion (GLM-4.5)'
+    'Guideline blind-spot phrasing suggestion'
   )
   return {
     suggestedClause: res.data?.suggestedClause?.trim() || null,
