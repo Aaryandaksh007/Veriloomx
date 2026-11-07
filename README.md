@@ -55,7 +55,7 @@ Import the GitHub repository into Vercel and add these environment variables for
 
 Vercel runs the checked-in Prisma migrations during each build. Do not use a local-only PostgreSQL instance or expose its port to the internet for deployment. pgAdmin can connect to Neon for administration, but it does not host the database. Keep database and Gemini secrets in Vercel's project environment settings, not in source files.
 
-## Judge-ready path
+## path
 
 Start on the dashboard and use the guided demo. Show one intentionally problematic draft, inspect its cited findings and redaction preview, remediate it, then complete the review and open its certificate. The review-role switcher is **simulated for the demo**; there is no sign-in or production authorization.
 
