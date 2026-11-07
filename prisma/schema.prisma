@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -61,16 +62,16 @@ model DraftVersion {
 // Audit runs — one per executed 6-pillar audit
 // ─────────────────────────────────────────────────────────────
 model AuditRun {
-  id               String   @id @default(cuid())
-  draftId          String
-  version          Int
-  score            Int // 0–100 compliance score
-  pillarSummaries  String // JSON: PillarSummary[]
-  findings         String // JSON: Finding[]
-  suppressed       Int      @default(0) // ungrounded AI flags discarded by the citation validator
-  redactedPreview  String? // text actually transmitted to external AI (post-scrub)
-  aiLedger         String // JSON: [{ model, purpose, ts }] — transparent AI disclosure
-  createdAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  draftId         String
+  version         Int
+  score           Int // 0–100 compliance score
+  pillarSummaries String // JSON: PillarSummary[]
+  findings        String // JSON: Finding[]
+  suppressed      Int      @default(0) // ungrounded AI flags discarded by the citation validator
+  redactedPreview String? // text actually transmitted to external AI (post-scrub)
+  aiLedger        String // JSON: [{ model, purpose, ts }] — transparent AI disclosure
+  createdAt       DateTime @default(now())
 
   actions FindingAction[]
 

@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -8,15 +8,18 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const databaseName = `.veriloom-e2e-${randomUUID()}.db`
-const databasePath = join(root, 'db', databaseName)
-const databaseUrl = `file:../db/${databaseName}`
-const standaloneServer = join(root, '.next', 'standalone', 'server.js')
+const nextCli = join(root, 'node_modules', 'next', 'dist', 'bin', 'next')
 const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js')
 const envLocal = join(root, '.env.local')
 
-function run(command, args, env) {
-  const result = spawnSync(command, args, { cwd: root, env, stdio: 'inherit', windowsHide: true })
+function run(command, args, env, input) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    env,
+    input,
+    stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
+    windowsHide: true,
+  })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} exited with status ${result.status ?? 'unknown'}`)
 }
@@ -56,14 +59,31 @@ async function stopServer(server) {
 }
 
 async function main() {
-  if (!existsSync(standaloneServer)) {
+  if (!existsSync(join(root, '.next', 'BUILD_ID'))) {
     throw new Error('Build the production app first with `bun run build`.')
   }
-  if (!existsSync(envLocal)) {
+  if (!process.env.E2E_DATABASE_URL) {
+    throw new Error('Set E2E_DATABASE_URL to a disposable PostgreSQL database before running the E2E test.')
+  }
+  if (!existsSync(envLocal) && !process.env.GEMINI_API_KEY) {
     throw new Error('Create .env.local with GEMINI_API_KEY before running the AI-backed E2E test.')
   }
 
-  const env = { ...process.env, DATABASE_URL: databaseUrl, NODE_ENV: 'production' }
+  const testDatabaseUrl = new URL(process.env.E2E_DATABASE_URL)
+  if (!['postgres:', 'postgresql:'].includes(testDatabaseUrl.protocol) || !testDatabaseUrl.hostname) {
+    throw new Error('E2E_DATABASE_URL must be a PostgreSQL connection URL.')
+  }
+
+  const schemaName = `veriloom_e2e_${randomUUID().replaceAll('-', '')}`
+  testDatabaseUrl.searchParams.set('schema', schemaName)
+  const databaseUrl = testDatabaseUrl.toString()
+  const env = {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    DIRECT_URL: databaseUrl,
+    NODE_ENV: 'production',
+  }
+
   let server
   try {
     run(process.execPath, [prismaCli, 'db', 'push'], env)
@@ -72,10 +92,17 @@ async function main() {
     const url = `http://127.0.0.1:${port}`
     server = spawn(
       process.execPath,
-      ['--env-file=.env', '--env-file=.env.local', standaloneServer],
+      [
+        ...(existsSync(join(root, '.env')) ? ['--env-file=.env'] : []),
+        ...(existsSync(envLocal) ? ['--env-file=.env.local'] : []),
+        nextCli,
+        'start',
+        '-p',
+        String(port),
+      ],
       {
         cwd: root,
-        env: { ...env, PORT: String(port), HOSTNAME: '127.0.0.1' },
+        env: { ...env, HOSTNAME: '127.0.0.1' },
         stdio: 'inherit',
         windowsHide: true,
       }
@@ -87,9 +114,12 @@ async function main() {
     try {
       await stopServer(server)
     } finally {
-      for (const suffix of ['', '-journal', '-shm', '-wal']) {
-        rmSync(`${databasePath}${suffix}`, { force: true })
-      }
+      run(
+        process.execPath,
+        [prismaCli, 'db', 'execute', '--stdin'],
+        { ...env, DIRECT_URL: databaseUrl },
+        `DROP SCHEMA IF EXISTS "${schemaName}" CASCADE;`
+      )
     }
   }
 }
