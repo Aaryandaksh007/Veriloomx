@@ -134,12 +134,12 @@ export const STATUS_META: Record<
   DraftStatus,
   { label: string; desc: string; tone: string }
 > = {
-  DRAFT: { label: 'Draft', desc: 'Awaiting audit', tone: 'bg-zinc-100 text-zinc-700 border-zinc-200' },
-  AUDITED: { label: 'Audited', desc: '6-pillar audit complete — remediation pending', tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-  REMEDIATED: { label: 'Remediated', desc: 'Fixes applied — ready for review', tone: 'bg-teal-50 text-teal-700 border-teal-200' },
-  IN_REVIEW: { label: 'In Review', desc: 'With Manager & Authorised Reviewer', tone: 'bg-violet-50 text-violet-700 border-violet-200' },
-  CHANGES_REQUESTED: { label: 'Changes Requested', desc: 'Returned to creator by Manager', tone: 'bg-orange-50 text-orange-700 border-orange-200' },
-  APPROVED: { label: 'Approved', desc: 'Signed off — certificate issued', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  DRAFT: { label: 'Draft', desc: 'Awaiting audit', tone: 'bg-stone-100 text-stone-600 border-stone-300' },
+  AUDITED: { label: 'Audited', desc: '6-pillar audit complete — remediation pending', tone: 'bg-ochre-50 text-ochre-700 border-ochre-200' },
+  REMEDIATED: { label: 'Remediated', desc: 'Fixes applied — ready for review', tone: 'bg-terra-50 text-terra-700 border-terra-200' },
+  IN_REVIEW: { label: 'In Review', desc: 'With Manager & Authorised Reviewer', tone: 'bg-stone-100 text-stone-700 border-stone-300' },
+  CHANGES_REQUESTED: { label: 'Changes Requested', desc: 'Returned to creator by Manager', tone: 'bg-clay-50 text-clay-700 border-clay-200' },
+  APPROVED: { label: 'Approved', desc: 'Signed off — certificate issued', tone: 'bg-olive-50 text-olive-700 border-olive-200' },
 }
 
 export type Role = 'creator' | 'manager' | 'reviewer'

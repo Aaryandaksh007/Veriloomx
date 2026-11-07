@@ -58,13 +58,13 @@ const TYPE_META: Record<
   VaultItemDTO['type'],
   { label: string; icon: React.ComponentType<{ className?: string }>; chip: string }
 > = {
-  VOICE: { label: 'Tone & Voice', icon: Type, chip: 'bg-teal-50 text-teal-700 border-teal-200' },
-  FACT: { label: 'Verified Facts', icon: CalendarClock, chip: 'bg-amber-50 text-amber-700 border-amber-200' },
-  TERM: { label: 'Terminology', icon: ArrowRight, chip: 'bg-violet-50 text-violet-700 border-violet-200' },
-  COLOR: { label: 'Colour Palette', icon: Palette, chip: 'bg-rose-50 text-rose-700 border-rose-200' },
-  LOGO: { label: 'Logo & Assets', icon: ImageIcon, chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  CONFIDENTIAL: { label: 'Confidential', icon: Lock, chip: 'bg-zinc-800 text-zinc-100 border-zinc-700' },
-  RULE: { label: 'Governance Rules', icon: Scale, chip: 'bg-zinc-100 text-zinc-700 border-zinc-300' },
+  VOICE: { label: 'Tone & Voice', icon: Type, chip: 'bg-terra-50 text-terra-700 border-terra-200' },
+  FACT: { label: 'Verified Facts', icon: CalendarClock, chip: 'bg-olive-50 text-olive-700 border-olive-200' },
+  TERM: { label: 'Terminology', icon: ArrowRight, chip: 'bg-stone-100 text-stone-600 border-stone-300' },
+  COLOR: { label: 'Colour Palette', icon: Palette, chip: 'bg-ochre-50 text-ochre-700 border-ochre-200' },
+  LOGO: { label: 'Logo & Assets', icon: ImageIcon, chip: 'bg-terra-100 text-terra-800 border-terra-200' },
+  CONFIDENTIAL: { label: 'Confidential', icon: Lock, chip: 'bg-clay-50 text-clay-700 border-clay-200' },
+  RULE: { label: 'Governance Rules', icon: Scale, chip: 'bg-ink text-cream border-stone-700' },
 }
 
 type TabKey = 'ALL' | VaultItemDTO['type']
@@ -106,20 +106,20 @@ export function VaultView() {
         subtitle="The single source of truth. Every audit finding must cite one of these clauses — anything else is suppressed by the zero-hallucination guard."
         showDraftChip={false}
         actions={
-          <Button onClick={() => setCreating(true)} className="bg-emerald-600 hover:bg-emerald-500">
+          <Button onClick={() => setCreating(true)} className="bg-terra-600 hover:bg-terra-500">
             <Plus className="mr-1.5 h-4 w-4" /> Add clause
           </Button>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-          <TabsList className="h-9 flex-wrap">
+          <TabsList className="h-9 max-w-full flex-nowrap overflow-x-auto vl-scroll sm:flex-wrap sm:overflow-visible">
             {(['ALL', 'VOICE', 'FACT', 'TERM', 'COLOR', 'LOGO', 'CONFIDENTIAL', 'RULE'] as TabKey[]).map(
               (k) => (
-                <TabsTrigger key={k} value={k} className="text-xs">
+                <TabsTrigger key={k} value={k} className="shrink-0 text-xs">
                   {k === 'ALL' ? 'All' : TYPE_META[k].label}
-                  <span className="ml-1 rounded-full bg-zinc-200 px-1.5 text-[10px] font-semibold text-zinc-600">
+                  <span className="ml-1 rounded-full bg-stone-200 px-1.5 text-[10px] font-semibold text-stone-600">
                     {counts[k] ?? 0}
                   </span>
                 </TabsTrigger>
@@ -127,13 +127,13 @@ export function VaultView() {
             )}
           </TabsList>
         </Tabs>
-        <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+        <div className="relative sm:ml-auto">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search clauses…"
-            className="h-9 w-56 border-zinc-200 pl-8 text-xs"
+            className="h-9 w-full border-line pl-8 text-xs sm:w-56"
           />
         </div>
       </div>
@@ -148,7 +148,7 @@ export function VaultView() {
           />
         ))}
         {items.length === 0 && (
-          <div className="col-span-full rounded-xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-400">
+          <div className="col-span-full rounded-xl border border-dashed border-stone-300 p-10 text-center text-sm text-faint">
             No clauses match this filter.
           </div>
         )}
@@ -179,7 +179,7 @@ export function VaultView() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-rose-600 hover:bg-rose-500"
+              className="bg-clay-600 hover:bg-clay-500"
               onClick={async () => {
                 if (deleting) {
                   await fetch(`/api/vault/${deleting.id}`, { method: 'DELETE' })
@@ -215,8 +215,8 @@ function VaultCard({
   return (
     <div
       className={cn(
-        'group flex flex-col rounded-xl border bg-white p-4 shadow-sm transition-opacity',
-        item.active ? 'border-zinc-200' : 'border-dashed border-zinc-300 opacity-60'
+        'group flex flex-col rounded-xl border bg-paper p-4 transition-opacity',
+        item.active ? 'border-line' : 'border-dashed border-stone-300 opacity-60'
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -233,46 +233,46 @@ function VaultCard({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={onEdit} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700" title="Edit">
+          <button onClick={onEdit} className="rounded-md p-1.5 text-faint hover:bg-parchment hover:text-ink" title="Edit">
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onDelete} className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Delete">
+          <button onClick={onDelete} className="rounded-md p-1.5 text-faint hover:bg-clay-50 hover:text-clay-600" title="Delete">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <h3 className="mt-2.5 text-sm font-bold leading-snug text-zinc-900">{item.title}</h3>
-      <p className="mt-1 flex-1 text-xs leading-relaxed text-zinc-500">{item.content}</p>
+      <h3 className="mt-2.5 text-sm font-bold leading-snug text-ink">{item.title}</h3>
+      <p className="mt-1 flex-1 text-xs leading-relaxed text-ink-soft">{item.content}</p>
 
       {Boolean(extra.hex || extra.replaceWith || extra.term || extra.match) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
           {typeof extra.hex === 'string' && (
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono font-semibold text-zinc-700">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-parchment px-2 py-1 font-mono font-semibold text-stone-700">
               <HexSwatch hex={extra.hex} size={14} /> {extra.hex}
             </span>
           )}
           {typeof extra.replaceWith === 'string' && typeof extra.match === 'string' && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-zinc-600">
-              <span className="font-semibold text-rose-600 line-through">{String(extra.match)}</span>
-              <ArrowRight className="h-3 w-3 text-zinc-400" />
-              <span className="font-semibold text-emerald-700">{extra.replaceWith}</span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-line bg-parchment px-2 py-1 text-stone-600">
+              <span className="font-semibold text-clay-600 line-through">{String(extra.match)}</span>
+              <ArrowRight className="h-3 w-3 text-faint" />
+              <span className="font-semibold text-olive-700">{extra.replaceWith}</span>
             </span>
           )}
           {typeof extra.term === 'string' && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-zinc-200">
+            <span className="inline-flex items-center gap-1 rounded-md border border-stone-700 bg-ink px-2 py-1 font-mono text-stone-300">
               <Lock className="h-3 w-3" /> {extra.term}
             </span>
           )}
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5">
-        <span className="text-[10.5px] text-zinc-400">
+      <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-2.5">
+        <span className="text-[10.5px] text-faint">
           Updated {timeAgo(item.updatedAt)}
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-[10.5px] font-medium text-zinc-400">active</span>
+          <span className="text-[10.5px] font-medium text-faint">active</span>
           <Switch
             checked={item.active}
             disabled={busy}
@@ -490,7 +490,7 @@ function ClauseDialog({
                     type="color"
                     value={form.hex}
                     onChange={(e) => setForm((f) => ({ ...f, hex: e.target.value }))}
-                    className="h-9 w-12 cursor-pointer rounded-md border border-zinc-200 bg-white p-1"
+                    className="h-9 w-12 cursor-pointer rounded-md border border-line bg-paper p-1"
                   />
                   <Input
                     className="w-32 font-mono"
@@ -561,7 +561,7 @@ function ClauseDialog({
                 onChange={(e) => setForm((f) => ({ ...f, figures: e.target.value }))}
                 placeholder="e.g. $29, $79, 14-day"
               />
-              <p className="mt-1 text-[11px] text-zinc-400">
+              <p className="mt-1 text-[11px] text-faint">
                 The deterministic claim scanner cross-checks these figures in every draft.
               </p>
             </div>
@@ -570,7 +570,7 @@ function ClauseDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-emerald-600 hover:bg-emerald-500">
+          <Button onClick={save} disabled={saving} className="bg-terra-600 hover:bg-terra-500">
             {saving ? 'Saving…' : item ? 'Save changes' : 'Add clause'}
           </Button>
         </DialogFooter>

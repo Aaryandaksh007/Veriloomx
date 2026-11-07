@@ -1,0 +1,711 @@
+     1→'use client'
+     2→
+     3→// ─────────────────────────────────────────────────────────────
+     4→// VeriLoom AI — Explainable Remediation Studio
+     5→// Highlighted spans, cited clauses, intent-preserving rewrites,
+     6→// and Human Override with Justification.
+     7→// ─────────────────────────────────────────────────────────────
+     8→import { useEffect, useMemo, useState } from 'react'
+     9→import { motion } from 'framer-motion'
+    10→import {
+    11→  WandSparkles,
+    12→  Check,
+    13→  Undo2,
+    14→  PencilLine,
+    15→  ShieldQuestion,
+    16→  Sparkles,
+    17→  Loader2,
+    18→  FileText,
+    19→  ImageIcon,
+    20→  Layers,
+    21→  BadgeCheck,
+    22→  ArrowRight,
+    23→} from 'lucide-react'
+    24→import { useApp, roleIdentity } from '@/lib/store'
+    25→import type {
+    26→  AuditResult,
+    27→  DraftDTO,
+    28→  Finding,
+    29→  FindingActionDTO,
+    30→} from '@/lib/types'
+    31→import { PILLAR_META } from '@/lib/types'
+    32→import { CitationCard, SeverityChip, StatusChip, ClauseBadge, ViewHeader } from './shared'
+    33→import { Button } from '@/components/ui/button'
+    34→import { Textarea } from '@/components/ui/textarea'
+    35→import {
+    36→  Dialog,
+    37→  DialogContent,
+    38→  DialogDescription,
+    39→  DialogFooter,
+    40→  DialogHeader,
+    41→  DialogTitle,
+    42→} from '@/components/ui/dialog'
+    43→import { toast } from '@/hooks/use-toast'
+    44→import { cn } from '@/lib/utils'
+    45→
+    46→interface DraftDetail {
+    47→  draft: DraftDTO
+    48→  audits: (AuditResult & { actions: FindingActionDTO[] })[]
+    49→}
+    50→
+    51→export function RemediationView() {
+    52→  const { data, selectedDraftId, selectDraft, refresh, role } = useApp()
+    53→  const drafts = (data?.drafts ?? []).filter((d) => d.status !== 'APPROVED' || true)
+    54→  const selected = drafts.find((d) => d.id === selectedDraftId) ?? null
+    55→  const [detail, setDetail] = useState<DraftDetail | null>(null)
+    56→  const [activeKey, setActiveKey] = useState<string | null>(null)
+    57→
+    58→  useEffect(() => {
+    59→    if (!selected) return
+    60→    let cancelled = false
+    61→    const load = async () => {
+    62→      const res = await fetch(`/api/drafts/${selected.id}`, { cache: 'no-store' })
+    63→      if (!res.ok || cancelled) return
+    64→      const body = (await res.json()) as DraftDetail
+    65→      if (!cancelled) setDetail(body)
+    66→    }
+    67→    void load()
+    68→    return () => {
+    69→      cancelled = true
+    70→    }
+    71→  }, [selected?.id, selected?.version, selected?.status, data?.drafts.length])
+    72→
+    73→  const audit = detail?.audits[0] ?? null
+    74→  const actionsBy = useMemo(
+    75→    () => new Map((audit?.actions ?? []).map((a) => [a.findingKey, a])),
+    76→    [audit]
+    77→  )
+    78→  const findings = audit?.findings ?? []
+    79→  const resolved = findings.filter((f) => actionsBy.has(f.key)).length
+    80→  const allResolved = findings.length > 0 && resolved === findings.length
+    81→
+    82→  const reload = async () => {
+    83→    if (!selected) return
+    84→    const res = await fetch(`/api/drafts/${selected.id}`, { cache: 'no-store' })
+    85→    if (res.ok) setDetail((await res.json()) as DraftDetail)
+    86→    await refresh()
+    87→  }
+    88→
+    89→  return (
+    90→    <div className="space-y-5">
+    91→      <ViewHeader
+    92→        crumb="Remediation"
+    93→        title="Explainable Remediation"
+    94→        subtitle="Every flag cites its clause. Accept the surgical fix — or override it with a written justification that feeds the Blindspot Engine."
+    95→      />
+    96→      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
+    97→      {/* draft list */}
+    98→      <div className="space-y-3">
+    99→        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Drafts</h2>
+   100→        <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
+   101→          {drafts.map((d) => {
+   102→            const a = data?.audits[d.id]
+   103→            const total = a?.findings.length ?? 0
+   104→            return (
+   105→              <button
+   106→                key={d.id}
+   107→                onClick={() => selectDraft(d.id)}
+   108→                className={cn(
+   109→                  'w-full rounded-xl border p-3 text-left transition-colors',
+   110→                  d.id === selected?.id
+   111→                    ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
+   112→                    : 'border-zinc-200 bg-white hover:border-zinc-300'
+   113→                )}
+   114→              >
+   115→                <div className="flex items-center justify-between gap-2">
+   116→                  <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500">
+   117→                    {d.kind === 'image' ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+   118→                    v{d.version}
+   119→                  </span>
+   120→                  <StatusChip status={d.status} />
+   121→                </div>
+   122→                <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-900">
+   123→                  {d.title}
+   124→                </p>
+   125→                {a && total > 0 && (
+   126→                  <p className="mt-0.5 text-[11px] text-zinc-400">{total} findings · score {a.score}</p>
+   127→                )}
+   128→              </button>
+   129→            )
+   130→          })}
+   131→        </div>
+   132→      </div>
+   133→
+   134→      {/* document view */}
+   135→      <div>
+   136→        {!selected || !audit ? (
+   137→          <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
+   138→            <WandSparkles className="h-10 w-10 text-zinc-300" />
+   139→            <p className="mt-3 text-sm font-semibold text-zinc-600">Nothing to remediate yet</p>
+   140→            <p className="mt-1 max-w-sm text-xs text-zinc-400">
+   141→              Select a draft that has been audited. Run an audit first from the Audit Studio.
+   142→            </p>
+   143→          </div>
+   144→        ) : (
+   145→          <div className="space-y-4">
+   146→            {/* progress header */}
+   147→            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+   148→              <div className="flex flex-wrap items-center justify-between gap-3">
+   149→                <div>
+   150→                  <h1 className="text-lg font-bold tracking-tight text-zinc-900">
+   151→                    {selected.title}
+   152→                  </h1>
+   153→                  <p className="mt-0.5 text-xs text-zinc-500">
+   154→                    Audit v{audit.version} · score {audit.score}/100 · {audit.suppressed} ungrounded
+   155→                    AI flags never reached you
+   156→                  </p>
+   157→                </div>
+   158→                <div className="flex items-center gap-3">
+   159→                  <div className="text-right">
+   160→                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+   161→                      Resolved
+   162→                    </p>
+   163→                    <p className="text-lg font-bold tabular-nums text-zinc-900">
+   164→                      {resolved}
+   165→                      <span className="text-zinc-400">/{findings.length}</span>
+   166→                    </p>
+   167→                  </div>
+   168→                  <RemediateButton
+   169→                    draftId={selected.id}
+   170→                    auditId={audit.id}
+   171→                    disabled={!allResolved}
+   172→                    onDone={reload}
+   173→                    actor={roleIdentity(role).name}
+   174→                  />
+   175→                </div>
+   176→              </div>
+   177→              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+   178→                <motion.div
+   179→                  className="h-full rounded-full bg-emerald-500"
+   180→                  animate={{ width: `${findings.length ? (resolved / findings.length) * 100 : 0}%` }}
+   181→                  transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+   182→                />
+   183→              </div>
+   184→            </div>
+   185→
+   186→            {/* document */}
+   187→            {selected.kind === 'text' ? (
+   188→              <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+   189→                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+   190→                  <Layers className="h-3.5 w-3.5" /> Document · flags highlighted
+   191→                </p>
+   192→                <HighlightedText
+   193→                  text={selected.content}
+   194→                  findings={findings}
+   195→                  actionsBy={actionsBy}
+   196→                  activeKey={activeKey}
+   197→                  onSelect={setActiveKey}
+   198→                />
+   199→              </div>
+   200→            ) : (
+   201→              <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+   202→                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+   203→                  <Layers className="h-3.5 w-3.5" /> Asset · flagged regions boxed
+   204→                </p>
+   205→                {selected.imageData && (
+   206→                  <div className="relative inline-block">
+   207→                    <img src={selected.imageData} alt={selected.title} className="max-w-full rounded-lg border border-zinc-200" />
+   208→                    {findings
+   209→                      .filter((f) => f.box)
+   210→                      .map((f) => {
+   211→                        const done = actionsBy.has(f.key)
+   212→                        // clamp VLM-sampled regions to the image bounds
+   213→                        const x = Math.max(0, Math.min(f.box!.x, 100))
+   214→                        const y = Math.max(0, Math.min(f.box!.y, 100))
+   215→                        const w = Math.max(1, Math.min(f.box!.w, 100 - x))
+   216→                        const h = Math.max(1, Math.min(f.box!.h, 100 - y))
+   217→                        return (
+   218→                          <button
+   219→                            key={f.key}
+   220→                            onClick={() => setActiveKey(f.key)}
+   221→                            className={cn(
+   222→                              'absolute rounded-md border-2 transition-all',
+   223→                              activeKey === f.key
+   224→                                ? 'border-rose-500 ring-2 ring-rose-300'
+   225→                                : 'border-rose-400/80 hover:border-rose-500',
+   226→                              done && 'border-emerald-400 opacity-60'
+   227→                            )}
+   228→                            style={{
+   229→                              left: `${x}%`,
+   230→                              top: `${y}%`,
+   231→                              width: `${w}%`,
+   232→                              height: `${h}%`,
+   233→                            }}
+   234→                            title={f.title}
+   235→                          >
+   236→                            <span className="absolute -top-2 -left-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+   237→                              {done ? '✓' : '!'}
+   238→                            </span>
+   239→                          </button>
+   240→                        )
+   241→                      })}
+   242→                  </div>
+   243→                )}
+   244→                <p className="mt-3 text-[11px] text-zinc-400">
+   245→                  Bounding boxes come from VLM region sampling; the pass/fail verdict is
+   246→                  computed with exact WCAG 2.1 luminance math.
+   247→                </p>
+   248→              </div>
+   249→            )}
+   250→          </div>
+   251→        )}
+   252→      </div>
+   253→
+   254→      {/* findings queue */}
+   255→      {selected && audit && (
+   256→        <div className="max-h-[calc(100vh-190px)] space-y-2.5 overflow-y-auto pr-1 vl-scroll">
+   257→          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">
+   258→            Findings queue
+   259→          </h2>
+   260→          {findings.map((f) => (
+   261→            <QueuedFinding
+   262→              key={f.key}
+   263→              finding={f}
+   264→              action={actionsBy.get(f.key) ?? null}
+   265→              active={activeKey === f.key}
+   266→              auditId={audit.id}
+   267→              onActivate={() => setActiveKey(f.key)}
+   268→              onChanged={reload}
+   269→            />
+   270→          ))}
+   271→          {findings.length === 0 && (
+   272→            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 text-center">
+   273→              <BadgeCheck className="mx-auto h-7 w-7 text-emerald-500" />
+   274→              <p className="mt-2 text-xs font-semibold text-emerald-800">
+   275→                Zero findings — this draft was clean.
+   276→              </p>
+   277→            </div>
+   278→          )}
+   279→        </div>
+   280→      )}
+   281→    </div>
+   282→    </div>
+   283→  )
+   284→}
+   285→
+   286→// ── highlighted document ─────────────────────────────────────
+   287→
+   288→function HighlightedText({
+   289→  text,
+   290→  findings,
+   291→  actionsBy,
+   292→  activeKey,
+   293→  onSelect,
+   294→}: {
+   295→  text: string
+   296→  findings: Finding[]
+   297→  actionsBy: Map<string, FindingActionDTO>
+   298→  activeKey: string | null
+   299→  onSelect: (key: string) => void
+   300→}) {
+   301→  const segments = useMemo(() => {
+   302→    const marks: { start: number; end: number; finding: Finding }[] = []
+   303→    const lower = text.toLowerCase()
+   304→    for (const f of findings) {
+   305→      if (!f.quote) continue
+   306→      const idx = lower.indexOf(f.quote.toLowerCase())
+   307→      if (idx === -1) continue
+   308→      const end = idx + f.quote.length
+   309→      // skip overlaps
+   310→      if (marks.some((m) => idx < m.end && end > m.start)) continue
+   311→      marks.push({ start: idx, end, finding: f })
+   312→    }
+   313→    marks.sort((a, b) => a.start - b.start)
+   314→
+   315→    const out: { text: string; finding?: Finding }[] = []
+   316→    let pos = 0
+   317→    for (const m of marks) {
+   318→      if (m.start > pos) out.push({ text: text.slice(pos, m.start) })
+   319→      out.push({ text: text.slice(m.start, m.end), finding: m.finding })
+   320→      pos = m.end
+   321→    }
+   322→    if (pos < text.length) out.push({ text: text.slice(pos) })
+   323→    return out
+   324→  }, [text, findings])
+   325→
+   326→  return (
+   327→    <div className="whitespace-pre-wrap text-[13.5px] leading-[1.9] text-zinc-800">
+   328→      {segments.map((seg, i) =>
+   329→        seg.finding ? (
+   330→          <mark
+   331→            key={i}
+   332→            onClick={() => onSelect(seg.finding!.key)}
+   333→            className={cn(
+   334→              'vl-hl',
+   335→              seg.finding.severity === 'critical' && 'vl-hl-critical',
+   336→              seg.finding.severity === 'warning' && 'vl-hl-warning',
+   337→              seg.finding.severity === 'info' && 'vl-hl-info',
+   338→              activeKey === seg.finding.key && 'outline outline-2 outline-offset-1 outline-zinc-900',
+   339→              actionsBy.has(seg.finding.key) && 'vl-hl-info opacity-60'
+   340→            )}
+   341→          >
+   342→            {seg.text}
+   343→            <sup className="ml-0.5 font-mono text-[9px] font-bold text-zinc-600">
+   344→              {actionsBy.has(seg.finding.key) ? '✓' : '!'}
+   345→            </sup>
+   346→          </mark>
+   347→        ) : (
+   348→          <span key={i}>{seg.text}</span>
+   349→        )
+   350→      )}
+   351→    </div>
+   352→  )
+   353→}
+   354→
+   355→// ── queued finding card ──────────────────────────────────────
+   356→
+   357→function QueuedFinding({
+   358→  finding,
+   359→  action,
+   360→  active,
+   361→  auditId,
+   362→  onActivate,
+   363→  onChanged,
+   364→}: {
+   365→  finding: Finding
+   366→  action: FindingActionDTO | null
+   367→  active: boolean
+   368→  auditId: string
+   369→  onActivate: () => void
+   370→  onChanged: () => Promise<void>
+   371→}) {
+   372→  const { role } = useApp()
+   373→  const [busy, setBusy] = useState(false)
+   374→  const [rewrite, setRewrite] = useState<{ rewrite: string; intentNotes: string | null } | null>(null)
+   375→  const [editing, setEditing] = useState(false)
+   376→  const [editText, setEditText] = useState('')
+   377→  const [overrideOpen, setOverrideOpen] = useState(false)
+   378→
+   379→  const post = async (payload: Record<string, unknown>) => {
+   380→    setBusy(true)
+   381→    try {
+   382→      const res = await fetch('/api/findings/action', {
+   383→        method: 'POST',
+   384→        headers: { 'Content-Type': 'application/json' },
+   385→        body: JSON.stringify({
+   386→          auditId,
+   387→          findingKey: finding.key,
+   388→          actor: roleIdentity(role).name,
+   389→          actorRole: role,
+   390→          ...payload,
+   391→        }),
+   392→      })
+   393→      const body = await res.json()
+   394→      if (!res.ok) throw new Error(body.error)
+   395→      await onChanged()
+   396→      return true
+   397→    } catch (err) {
+   398→      toast({ title: 'Action failed', description: String(err), variant: 'destructive' })
+   399→      return false
+   400→    } finally {
+   401→      setBusy(false)
+   402→    }
+   403→  }
+   404→
+   405→  const undo = async () => {
+   406→    setBusy(true)
+   407→    try {
+   408→      const res = await fetch('/api/findings/action', {
+   409→        method: 'DELETE',
+   410→        headers: { 'Content-Type': 'application/json' },
+   411→        body: JSON.stringify({ auditId, findingKey: finding.key }),
+   412→      })
+   413→      if (!res.ok) throw new Error('undo failed')
+   414→      await onChanged()
+   415→    } catch {
+   416→      toast({ title: 'Undo failed', variant: 'destructive' })
+   417→    } finally {
+   418→      setBusy(false)
+   419→    }
+   420→  }
+   421→
+   422→  return (
+   423→    <motion.div
+   424→      layout
+   425→      onClick={onActivate}
+   426→      className={cn(
+   427→        'cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-colors',
+   428→        active ? 'border-zinc-400 ring-1 ring-zinc-300' : 'border-zinc-200',
+   429→        action && 'opacity-90'
+   430→      )}
+   431→    >
+   432→      <OverrideDialog
+   433→        open={overrideOpen}
+   434→        onOpenChange={setOverrideOpen}
+   435→        onSubmit={async (note) => post({ action: 'overridden', note })}
+   436→      />
+   437→      <div className="flex items-start justify-between gap-2">
+   438→        <div className="min-w-0">
+   439→          <div className="flex items-center gap-1.5">
+   440→            <SeverityChip severity={finding.severity} />
+   441→            <span className="font-mono text-[10px] font-bold text-zinc-400">{finding.key}</span>
+   442→          </div>
+   443→          <p className="mt-1.5 text-[13px] font-semibold leading-snug text-zinc-900">
+   444→            {finding.title}
+   445→          </p>
+   446→        </div>
+   447→        {action && (
+   448→          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+   449→            <Check className="h-3 w-3" />
+   450→            {action.action.toUpperCase()}
+   451→          </span>
+   452→        )}
+   453→      </div>
+   454→
+   455→      {finding.quote && (
+   456→        <p className="mt-1.5 rounded-md bg-zinc-100 px-2 py-1 font-mono text-[11px] leading-snug text-zinc-600">
+   457→          “{finding.quote}”
+   458→        </p>
+   459→      )}
+   460→
+   461→      {!action ? (
+   462→        <div className="mt-2.5 space-y-2" onClick={(e) => e.stopPropagation()}>
+   463→          <div className="flex flex-wrap gap-1.5">
+   464→            {finding.suggestion && (
+   465→              <Button
+   466→                size="sm"
+   467→                disabled={busy}
+   468→                onClick={() => post({ action: 'accepted', appliedText: finding.suggestion })}
+   469→                className="h-7 bg-emerald-600 px-2.5 text-[11px] hover:bg-emerald-500"
+   470→              >
+   471→                <Check className="mr-1 h-3 w-3" />
+   472→                Accept {finding.suggestionSource === 'ai' ? 'AI fix' : 'fix'}
+   473→              </Button>
+   474→            )}
+   475→            {finding.quote && (
+   476→              <Button
+   477→                size="sm"
+   478→                variant="outline"
+   479→                disabled={busy}
+   480→                onClick={async () => {
+   481→                  setBusy(true)
+   482→                  try {
+   483→                    const res = await fetch('/api/rewrite', {
+   484→                      method: 'POST',
+   485→                      headers: { 'Content-Type': 'application/json' },
+   486→                      body: JSON.stringify({ auditId, findingKey: finding.key }),
+   487→                    })
+   488→                    const body = await res.json()
+   489→                    if (!res.ok) throw new Error(body.error)
+   490→                    setRewrite(body)
+   491→                  } catch (err) {
+   492→                    toast({ title: 'Co-pilot unavailable', description: String(err), variant: 'destructive' })
+   493→                  } finally {
+   494→                    setBusy(false)
+   495→                  }
+   496→                }}
+   497→                className="h-7 px-2.5 text-[11px]"
+   498→              >
+   499→                {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
+   500→                Intent-preserving rewrite
+   501→              </Button>
+   502→            )}
+   503→            <Button
+   504→              size="sm"
+   505→              variant="outline"
+   506→              disabled={busy}
+   507→              onClick={() => {
+   508→                setEditText(finding.suggestion ?? finding.quote)
+   509→                setEditing(true)
+   510→              }}
+   511→              className="h-7 px-2.5 text-[11px]"
+   512→            >
+   513→              <PencilLine className="mr-1 h-3 w-3" /> Edit
+   514→            </Button>
+   515→            <Button
+   516→              size="sm"
+   517→              variant="outline"
+   518→              disabled={busy}
+   519→              onClick={() => setOverrideOpen(true)}
+   520→              className="h-7 border-amber-300 px-2.5 text-[11px] text-amber-700 hover:bg-amber-50"
+   521→            >
+   522→              <ShieldQuestion className="mr-1 h-3 w-3" /> Override
+   523→            </Button>
+   524→          </div>
+   525→
+   526→          {rewrite && (
+   527→            <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-2.5">
+   528→              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700">
+   529→                Co-pilot rewrite · minimal diff, intent preserved
+   530→              </p>
+   531→              <p className="mt-1 text-xs font-medium leading-relaxed text-teal-900">
+   532→                “{rewrite.rewrite}”
+   533→              </p>
+   534→              {rewrite.intentNotes && (
+   535→                <p className="mt-1 text-[10.5px] italic text-teal-700/80">
+   536→                  {rewrite.intentNotes}
+   537→                </p>
+   538→              )}
+   539→              <div className="mt-2 flex gap-1.5">
+   540→                <Button
+   541→                  size="sm"
+   542→                  className="h-7 bg-teal-600 px-2.5 text-[11px] hover:bg-teal-500"
+   543→                  disabled={busy}
+   544→                  onClick={() => post({ action: 'accepted', appliedText: rewrite.rewrite })}
+   545→                >
+   546→                  <Check className="mr-1 h-3 w-3" /> Use rewrite
+   547→                </Button>
+   548→                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setRewrite(null)}>
+   549→                  Dismiss
+   550→                </Button>
+   551→              </div>
+   552→            </div>
+   553→          )}
+   554→
+   555→          {editing && (
+   556→            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2.5">
+   557→              <Textarea
+   558→                className="min-h-[70px] text-xs"
+   559→                value={editText}
+   560→                onChange={(e) => setEditText(e.target.value)}
+   561→                placeholder="Write the replacement span…"
+   562→              />
+   563→              <div className="mt-1.5 flex gap-1.5">
+   564→                <Button
+   565→                  size="sm"
+   566→                  className="h-7 bg-zinc-900 px-2.5 text-[11px] hover:bg-zinc-800"
+   567→                  disabled={busy}
+   568→                  onClick={async () => {
+   569→                    if (await post({ action: 'edited', appliedText: editText })) setEditing(false)
+   570→                  }}
+   571→                >
+   572→                  Save edit
+   573→                </Button>
+   574→                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setEditing(false)}>
+   575→                  Cancel
+   576→                </Button>
+   577→              </div>
+   578→            </div>
+   579→          )}
+   580→        </div>
+   581→      ) : (
+   582→        <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+   583→          <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-2">
+   584→            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+   585→              {action.action === 'overridden' ? 'Human override — original kept' : 'Replacement'}
+   586→            </p>
+   587→            <p className="mt-0.5 text-[11.5px] leading-snug text-zinc-700">
+   588→              {action.action === 'overridden'
+   589→                ? `“${action.note ?? ''}”`
+   590→                : `“${finding.quote}” → “${action.appliedText}”`}
+   591→            </p>
+   592→          </div>
+   593→          <button
+   594→            onClick={undo}
+   595→            disabled={busy}
+   596→            className="flex items-center gap-1 text-[10.5px] font-semibold text-zinc-400 hover:text-zinc-700"
+   597→          >
+   598→            <Undo2 className="h-3 w-3" /> revise decision
+   599→          </button>
+   600→        </div>
+   601→      )}
+   602→    </motion.div>
+   603→  )
+   604→}
+   605→
+   606→// ── override dialog ──────────────────────────────────────────
+   607→
+   608→export function OverrideDialog({
+   609→  open,
+   610→  onOpenChange,
+   611→  onSubmit,
+   612→}: {
+   613→  open: boolean
+   614→  onOpenChange: (o: boolean) => void
+   615→  onSubmit: (note: string) => Promise<boolean>
+   616→}) {
+   617→  const [note, setNote] = useState('')
+   618→  const [busy, setBusy] = useState(false)
+   619→  return (
+   620→    <Dialog open={open} onOpenChange={onOpenChange}>
+   621→      <DialogContent className="sm:max-w-md">
+   622→        <DialogHeader>
+   623→          <DialogTitle>Human Override — Keep Original</DialogTitle>
+   624→          <DialogDescription>
+   625→            Automation supports rather than overrides human judgment. Your justification is
+   626→            recorded in the audit trail, shown to the reviewer, and fed to the Guideline
+   627→            Blindspot Engine.
+   628→          </DialogDescription>
+   629→        </DialogHeader>
+   630→        <Textarea
+   631→          className="min-h-[90px] text-xs"
+   632→          value={note}
+   633→          onChange={(e) => setNote(e.target.value)}
+   634→          placeholder="Why should this flag be waived? (min 15 characters)"
+   635→        />
+   636→        <DialogFooter>
+   637→          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   638→          <Button
+   639→            className="bg-amber-600 hover:bg-amber-500"
+   640→            disabled={busy || note.trim().length < 15}
+   641→            onClick={async () => {
+   642→              setBusy(true)
+   643→              const ok = await onSubmit(note.trim())
+   644→              setBusy(false)
+   645→              if (ok) {
+   646→                setNote('')
+   647→                onOpenChange(false)
+   648→              }
+   649→            }}
+   650→          >
+   651→            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldQuestion className="mr-2 h-4 w-4" />}
+   652→            Log override
+   653→          </Button>
+   654→        </DialogFooter>
+   655→      </DialogContent>
+   656→    </Dialog>
+   657→  )
+   658→}
+   659→
+   660→// ── remediate button ─────────────────────────────────────────
+   661→
+   662→function RemediateButton({
+   663→  draftId,
+   664→  auditId,
+   665→  disabled,
+   666→  onDone,
+   667→  actor,
+   668→}: {
+   669→  draftId: string
+   670→  auditId: string
+   671→  disabled: boolean
+   672→  onDone: () => Promise<void>
+   673→  actor: string
+   674→}) {
+   675→  const [busy, setBusy] = useState(false)
+   676→  const { setView } = useApp()
+   677→  return (
+   678→    <Button
+   679→      disabled={disabled || busy}
+   680→      className="bg-emerald-600 hover:bg-emerald-500"
+   681→      onClick={async () => {
+   682→        setBusy(true)
+   683→        try {
+   684→          const res = await fetch('/api/remediate', {
+   685→            method: 'POST',
+   686→            headers: { 'Content-Type': 'application/json' },
+   687→            body: JSON.stringify({ draftId, auditId, actor }),
+   688→          })
+   689→          const body = await res.json()
+   690→          if (!res.ok) throw new Error(body.error)
+   691→          await onDone()
+   692→          toast({
+   693→            title: `Remediated version v${body.version} created`,
+   694→            description: `${body.applied} fixes applied · ${body.overrides} override(s) preserved`,
+   695→          })
+   696→          setView('review')
+   697→        } catch (err) {
+   698→          toast({ title: 'Remediation failed', description: String(err), variant: 'destructive' })
+   699→        } finally {
+   700→          setBusy(false)
+   701→        }
+   702→      }}
+   703→    >
+   704→      {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+   705→      {disabled ? 'Resolve all findings first' : 'Create remediated version'}
+   706→    </Button>
+   707→  )
+   708→}
+   709→
+   710→export { ClauseBadge, PILLAR_META }
+   711→

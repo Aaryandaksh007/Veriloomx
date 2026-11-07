@@ -86,13 +86,13 @@ export function ProblemSection() {
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         className="mb-3.5"
       >
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
           Why this matters
         </p>
-        <h2 className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900">
+        <h2 className="mt-0.5 font-serif text-lg font-semibold tracking-tight text-ink">
           The problem: anyone can publish, nobody double-checks
         </h2>
-        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-500">
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-soft">
           Decentralised teams, agencies and generative AI produce hundreds of
           assets a week. Brand guidelines live in a 60-page PDF nobody opens
           under deadline. Switch between the four failure modes that reach
@@ -100,10 +100,10 @@ export function ProblemSection() {
         </p>
       </motion.div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-line bg-paper">
         {/* tab strip */}
         <div
-          className="flex gap-1 overflow-x-auto border-b border-zinc-100 bg-zinc-50/60 px-2 pt-2 vl-scroll"
+          className="flex gap-1 overflow-x-auto border-b border-stone-200 bg-parchment/60 px-2 pt-2 vl-scroll"
           role="tablist"
           aria-label="Failure modes"
         >
@@ -118,23 +118,23 @@ export function ProblemSection() {
                 aria-selected={isActive}
                 onClick={() => setActive(i)}
                 className={cn(
-                  'relative flex shrink-0 items-center gap-1.5 rounded-t-lg px-3.5 py-2.5 text-xs font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-300',
+                  'relative flex shrink-0 items-center gap-1.5 rounded-t-lg px-3.5 py-2.5 text-xs font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-terra-400/60',
                   isActive
-                    ? 'bg-white text-zinc-900'
-                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                    ? 'bg-paper text-ink'
+                    : 'text-ink-soft hover:bg-parchment hover:text-ink'
                 )}
               >
                 <ItemIcon
                   className={cn(
                     'h-3.5 w-3.5',
-                    isActive ? 'text-emerald-500' : 'text-zinc-400'
+                    isActive ? 'text-terra-500' : 'text-faint'
                   )}
                 />
                 {item.tab}
                 {isActive && (
                   <motion.span
                     layoutId="vl-problem-tab"
-                    className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-emerald-500"
+                    className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-terra-500"
                     transition={{ type: 'spring', stiffness: 500, damping: 38 }}
                   />
                 )}
@@ -155,42 +155,42 @@ export function ProblemSection() {
             role="tabpanel"
           >
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-parchment text-ink-soft">
                 <Icon className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="text-base font-bold tracking-tight text-zinc-900">
+                <h3 className="text-base font-bold tracking-tight text-ink">
                   {f.title}
                 </h3>
-                <p className="text-xs text-zinc-500">{f.desc}</p>
+                <p className="text-xs text-ink-soft">{f.desc}</p>
               </div>
-              <span className="ml-auto hidden rounded-md bg-zinc-900 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-zinc-100 sm:inline-flex">
+              <span className="ml-auto hidden rounded-md bg-ink px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-cream sm:inline-flex">
                 {f.clause}
               </span>
             </div>
 
             {/* wrong vs caught */}
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-rose-200/80 bg-rose-50/60 p-3.5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-rose-500">
+              <div className="rounded-lg border border-clay-200/80 bg-clay-50/60 p-3.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-clay-700">
                   What ships today
                 </p>
                 <p className="mt-1.5 flex items-start gap-2 text-xs leading-relaxed">
-                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100">
-                    <X className="h-2.5 w-2.5 text-rose-600" strokeWidth={3} />
+                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-clay-100">
+                    <X className="h-2.5 w-2.5 text-clay-600" strokeWidth={3} />
                   </span>
-                  <span className="text-rose-700 line-through decoration-rose-400">
+                  <span className="text-clay-700 line-through decoration-clay-400">
                     {f.wrong}
                   </span>
                 </p>
               </div>
-              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3.5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-600">
+              <div className="rounded-lg border border-olive-200/80 bg-olive-50/60 p-3.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-olive-700">
                   What VeriLoom does
                 </p>
-                <p className="mt-1.5 flex items-start gap-2 text-xs font-medium leading-relaxed text-emerald-800">
-                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                    <Check className="h-2.5 w-2.5 text-emerald-600" strokeWidth={3} />
+                <p className="mt-1.5 flex items-start gap-2 text-xs font-medium leading-relaxed text-olive-800">
+                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-olive-100">
+                    <Check className="h-2.5 w-2.5 text-olive-600" strokeWidth={3} />
                   </span>
                   {f.caught}
                 </p>
@@ -200,13 +200,13 @@ export function ProblemSection() {
         </AnimatePresence>
 
         {/* anchor line */}
-        <div className="flex items-center gap-3 border-t border-zinc-100 bg-zinc-50/60 px-5 py-3">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
-          <p className="text-xs leading-relaxed text-zinc-600">
-            VeriLoom checks every asset <span className="font-bold text-zinc-900">before it goes live</span> —
+        <div className="flex items-center gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-3">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-terra-500" />
+          <p className="text-xs leading-relaxed text-ink-soft">
+            VeriLoom checks every asset <span className="font-bold text-ink">before it goes live</span> —
             explains each flag by citing the exact guideline clause, suggests a
             minimal fix, and records who approved what.{' '}
-            <span className="text-zinc-400">
+            <span className="text-faint">
               That&rsquo;s the difference between a blocker and a co-pilot.
             </span>
           </p>

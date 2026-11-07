@@ -1,0 +1,857 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→// ─────────────────────────────────────────────────────────────
+     4→     4→// VeriLoom AI — Dashboard (mission control)
+     5→     5→// Every module hangs off this page: live stats, the draft
+     6→     6→// pipeline board ("continue where you left off"), the live
+     7→     7→// playground, a guided demo, and an interactive workflow rail.
+     8→     8→// ─────────────────────────────────────────────────────────────
+     9→     9→import { useEffect, useMemo, useState } from 'react'
+    10→    10→import { AnimatePresence, motion } from 'framer-motion'
+    11→    11→import {
+    12→    12→  ArrowRight,
+    13→    13→  BadgeCheck,
+    14→    14→  Check,
+    15→    15→  Cpu,
+    16→    16→  Eye,
+    17→    17→  FlaskConical,
+    18→    18→  Image as ImageIcon,
+    19→    19→  Pause,
+    20→    20→  Play,
+    21→    21→  ScanSearch,
+    22→    22→  ShieldCheck,
+    23→    23→  Zap,
+    24→    24→} from 'lucide-react'
+    25→    25→import { useApp, roleIdentity, type View } from '@/lib/store'
+    26→    26→import type { AuditResult, DraftDTO } from '@/lib/types'
+    27→    27→import { AnimatedNumber, EngineChip, StatusChip, timeAgo } from './shared'
+    28→    28→import { ProblemSection } from './problem-section'
+    29→    29→import { LivePlayground } from './live-playground'
+    30→    30→import { DemoChecklist } from './demo-checklist'
+    31→    31→import { Button } from '@/components/ui/button'
+    32→    32→import { cn } from '@/lib/utils'
+    33→    33→
+    34→    34→const VIEW_LABEL: Record<View, string> = {
+    35→    35→  dashboard: 'Dashboard',
+    36→    36→  vault: 'Brand Vault',
+    37→    37→  audit: 'Audit Studio',
+    38→    38→  remediation: 'Remediation',
+    39→    39→  review: 'Review & Approval',
+    40→    40→  analytics: 'Governance Analytics',
+    41→    41→  certificate: 'Compliance Certificate',
+    42→    42→}
+    43→    43→
+    44→    44→const fixDone = (d: DraftDTO) =>
+    45→    45→  d.status === 'REMEDIATED' ||
+    46→    46→  d.status === 'IN_REVIEW' ||
+    47→    47→  d.status === 'APPROVED' ||
+    48→    48→  d.status === 'CHANGES_REQUESTED' ||
+    49→    49→  d.version >= 2
+    50→    50→
+    51→    51→const reviewDone = (d: DraftDTO) =>
+    52→    52→  d.status === 'IN_REVIEW' || d.status === 'CHANGES_REQUESTED' || d.status === 'APPROVED'
+    53→    53→
+    54→    54→/** Where should this draft be worked on right now? */
+    55→    55→function routeFor(d: DraftDTO): View {
+    56→    56→  switch (d.status) {
+    57→    57→    case 'APPROVED':
+    58→    58→      return 'certificate'
+    59→    59→    case 'IN_REVIEW':
+    60→    60→      return 'review'
+    61→    61→    case 'REMEDIATED':
+    62→    62→      return 'review'
+    63→    63→    case 'CHANGES_REQUESTED':
+    64→    64→      return 'remediation'
+    65→    65→    case 'AUDITED':
+    66→    66→      return 'remediation'
+    67→    67→    default:
+    68→    68→      return 'audit'
+    69→    69→  }
+    70→    70→}
+    71→    71→
+    72→    72→const NEXT_HINT: Record<string, string> = {
+    73→    73→  draft: 'Submit it for a 6-pillar audit',
+    74→    74→  audit: 'Run the audit in Audit Studio',
+    75→    75→  fix: 'Apply the cited fixes in Remediation',
+    76→    76→  review: 'Await role-based sign-off in Review',
+    77→    77→  live: 'Approved — certificate available',
+    78→    78→}
+    79→    79→
+    80→    80→export function DashboardView() {
+    81→    81→  const { data, setView, selectDraft, role } = useApp()
+    82→    82→
+    83→    83→  const audits = data ? Object.values(data.audits) : []
+    84→    84→  const totalFindings = audits.reduce((s, a) => s + a.findings.length, 0)
+    85→    85→  const totalSuppressed = audits.reduce((s, a) => s + a.suppressed, 0)
+    86→    86→  const inFlight = data?.drafts.filter((d) => d.status !== 'APPROVED').length ?? 0
+    87→    87→  const demoDraft =
+    88→    88→    data?.drafts.find((d) => d.title.includes('Press release')) ??
+    89→    89→    data?.drafts.find((d) => d.status !== 'APPROVED') ??
+    90→    90→    data?.drafts[0]
+    91→    91→
+    92→    92→  return (
+    93→    93→    <div className="space-y-8">
+    94→    94→      {/* ── 1 · Command bar ─────────────────────────────── */}
+    95→    95→      <CommandBar
+    96→    96→        clauses={data?.vault.length ?? 0}
+    97→    97→        inFlight={inFlight}
+    98→    98→        findings={totalFindings}
+    99→    99→        suppressed={totalSuppressed}
+   100→   100→        roleLabel={roleIdentity(role).label}
+   101→   101→        onTryLive={() => {
+   102→   102→          document
+   103→   103→            .getElementById('live-playground')
+   104→   104→            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+   105→   105→          setTimeout(
+   106→   106→            () =>
+   107→   107→              document
+   108→   108→                .querySelector<HTMLTextAreaElement>(
+   109→   109→                  'textarea[aria-label="Live brand check editor"]'
+   110→   110→                )
+   111→   111→                ?.focus(),
+   112→   112→            450
+   113→   113→          )
+   114→   114→        }}
+   115→   115→        onDemoAudit={() => {
+   116→   116→          if (demoDraft) selectDraft(demoDraft.id, 'audit')
+   117→   117→          else setView('audit')
+   118→   118→        }}
+   119→   119→      />
+   120→   120→
+   121→   121→      {/* ── 2 · Pipeline board — everything starts here ── */}
+   122→   122→      <PipelineBoard />
+   123→   123→
+   124→   124→      {/* ── 3 · Live playground ────────────────────────── */}
+   125→   125→      <div id="live-playground" className="scroll-mt-6">
+   126→   126→        <LivePlayground />
+   127→   127→      </div>
+   128→   128→
+   129→   129→      {/* ── 4 · Guided demo checklist ──────────────────── */}
+   130→   130→      <DemoChecklist />
+   131→   131→
+   132→   132→      {/* ── 5 · Interactive workflow rail ──────────────── */}
+   133→   133→      <WorkflowRail />
+   134→   134→
+   135→   135→      {/* ── 6 · The problem, in plain language ─────────── */}
+   136→   136→      <ProblemSection />
+   137→   137→
+   138→   138→      {/* ── 7 · Engine + live activity ─────────────────── */}
+   139→   139→      <section className="grid gap-6 lg:grid-cols-5">
+   140→   140→        <div className="lg:col-span-3">
+   141→   141→          <SectionHead
+   142→   142→            kicker="Under the hood"
+   143→   143→            title="Neuro-symbolic audit engine"
+   144→   144→            desc="Deterministic mathematics and semantic reasoning are strictly separated — colour distances and contrast ratios are never guessed by an LLM."
+   145→   145→          />
+   146→   146→          <div className="grid gap-3 sm:grid-cols-2">
+   147→   147→            <EngineCard
+   148→   148→              icon={Cpu}
+   149→   149→              title="Deterministic Core"
+   150→   150→              body="Terminology lexicon matching, CIELAB ΔE2000 colour distance (tolerance ≤ 5.0), WCAG 2.1 relative-luminance contrast, and PII regex scrubbing — pure algorithms, byte-exact."
+   151→   151→              engines={['deterministic']}
+   152→   152→            />
+   153→   153→            <EngineCard
+   154→   154→              icon={FlaskConical}
+   155→   155→              title="Citation-Constrained RAG"
+   156→   156→              body="Tone and claims are verified against Vault facts. A flag missing a valid clause_id or a locatable quote is programmatically discarded before it reaches a human."
+   157→   157→              engines={['rag', 'hybrid']}
+   158→   158→            />
+   159→   159→            <EngineCard
+   160→   160→              icon={Eye}
+   161→   161→              title="VLM Visual Sampling"
+   162→   162→              body="The vision model reports text regions and colours, which are then re-computed with exact WCAG math — the LLM never gets the final say on accessibility."
+   163→   163→              engines={['vlm']}
+   164→   164→            />
+   165→   165→            <EngineCard
+   166→   166→              icon={ShieldCheck}
+   167→   167→              title="Human Override Ledger"
+   168→   168→              body="Every override demands a written justification, feeds the Guideline Blindspot Engine, and appears on the final compliance certificate."
+   169→   169→              engines={[]}
+   170→   170→            />
+   171→   171→          </div>
+   172→   172→        </div>
+   173→   173→
+   174→   174→        <div className="lg:col-span-2">
+   175→   175→          <SectionHead kicker="Liveness" title="Governance activity" />
+   176→   176→          <ActivityTimeline />
+   177→   177→        </div>
+   178→   178→      </section>
+   179→   179→    </div>
+   180→   180→  )
+   181→   181→}
+   182→   182→
+   183→   183→/* ═══════════════════════════════════════════════════════════
+   184→   184→   Section 1 — command bar: greeting, live stats, primary CTAs
+   185→   185→   ═══════════════════════════════════════════════════════════ */
+   186→   186→function CommandBar({
+   187→   187→  clauses,
+   188→   188→  inFlight,
+   189→   189→  findings,
+   190→   190→  suppressed,
+   191→   191→  roleLabel,
+   192→   192→  onTryLive,
+   193→   193→  onDemoAudit,
+   194→   194→}: {
+   195→   195→  clauses: number
+   196→   196→  inFlight: number
+   197→   197→  findings: number
+   198→   198→  suppressed: number
+   199→   199→  roleLabel: string
+   200→   200→  onTryLive: () => void
+   201→   201→  onDemoAudit: () => void
+   202→   202→}) {
+   203→   203→  const hour = new Date().getHours()
+   204→   204→  const greeting =
+   205→   205→    hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+   206→   206→
+   207→   207→  const stats: { label: string; value: number; hint: string; tone?: string }[] = [
+   208→   208→    { label: 'Vault clauses', value: clauses, hint: 'indexed & citable' },
+   209→   209→    { label: 'Drafts in flight', value: inFlight, hint: 'under governance' },
+   210→   210→    { label: 'Findings caught', value: findings, hint: 'across all audits' },
+   211→   211→    {
+   212→   212→      label: 'Ungrounded flags suppressed',
+   213→   213→      value: suppressed,
+   214→   214→      hint: 'zero-hallucination guard',
+   215→   215→      tone: 'text-emerald-600',
+   216→   216→    },
+   217→   217→  ]
+   218→   218→
+   219→   219→  return (
+   220→   220→    <motion.section
+   221→   221→      initial={{ opacity: 0, y: 14 }}
+   222→   222→      animate={{ opacity: 1, y: 0 }}
+   223→   223→      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+   224→   224→      className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm"
+   225→   225→    >
+   226→   226→      <div className="p-5 sm:p-7">
+   227→   227→        <div className="flex flex-wrap items-start justify-between gap-4">
+   228→   228→          <div className="min-w-0">
+   229→   229→            <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
+   230→   230→              <span className="relative flex h-2 w-2">
+   231→   231→                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+   232→   232→                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+   233→   233→              </span>
+   234→   234→              Live workspace · auto-sync
+   235→   235→            </p>
+   236→   236→            <h1
+   237→   237→              suppressHydrationWarning
+   238→   238→              className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-[1.7rem]"
+   239→   239→            >
+   240→   240→              {greeting} — everything starts here.
+   241→   241→            </h1>
+   242→   242→            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+   243→   243→              Pick up any draft below, or try the engine on your own words.
+   244→   244→              Every asset passes six brand-governance checks before it ships —{' '}
+   245→   245→              <span className="font-semibold text-zinc-700">
+   246→   246→                explained, cited, approved.
+   247→   247→              </span>
+   248→   248→            </p>
+   249→   249→          </div>
+   250→   250→
+   251→   251→          <div className="flex shrink-0 flex-wrap gap-2">
+   252→   252→            <Button
+   253→   253→              size="sm"
+   254→   254→              className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+   255→   255→              onClick={onTryLive}
+   256→   256→            >
+   257→   257→              <Zap className="mr-1.5 h-3.5 w-3.5" />
+   258→   258→              Try it live
+   259→   259→            </Button>
+   260→   260→            <Button
+   261→   261→              size="sm"
+   262→   262→              variant="outline"
+   263→   263→              className="border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+   264→   264→              onClick={onDemoAudit}
+   265→   265→            >
+   266→   266→              <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
+   267→   267→              Run demo audit
+   268→   268→            </Button>
+   269→   269→          </div>
+   270→   270→        </div>
+   271→   271→
+   272→   272→        {/* live stat strip */}
+   273→   273→        <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-zinc-100 pt-5 lg:grid-cols-4">
+   274→   274→          {stats.map((s, i) => (
+   275→   275→            <motion.div
+   276→   276→              key={s.label}
+   277→   277→              initial={{ opacity: 0, y: 10 }}
+   278→   278→              animate={{ opacity: 1, y: 0 }}
+   279→   279→              transition={{ delay: 0.15 + i * 0.08, duration: 0.4 }}
+   280→   280→            >
+   281→   281→              <p
+   282→   282→                className={cn(
+   283→   283→                  'text-2xl font-bold tabular-nums tracking-tight text-zinc-900',
+   284→   284→                  s.tone
+   285→   285→                )}
+   286→   286→              >
+   287→   287→                <AnimatedNumber value={s.value} />
+   288→   288→              </p>
+   289→   289→              <p className="mt-0.5 text-[11px] font-semibold text-zinc-600">{s.label}</p>
+   290→   290→              <p className="text-[10.5px] text-zinc-400">{s.hint}</p>
+   291→   291→            </motion.div>
+   292→   292→          ))}
+   293→   293→        </div>
+   294→   294→      </div>
+   295→   295→
+   296→   296→      {/* hairline role bar */}
+   297→   297→      <div className="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-5 py-2.5 sm:px-7">
+   298→   298→        <p className="truncate text-[11px] text-zinc-500">
+   299→   299→          Viewing as <span className="font-semibold text-zinc-700">{roleLabel}</span> — switch the acting role to watch RBAC permissions change live.
+   300→   300→        </p>
+   301→   301→      </div>
+   302→   302→    </motion.section>
+   303→   303→  )
+   304→   304→}
+   305→   305→
+   306→   306→/* ═══════════════════════════════════════════════════════════
+   307→   307→   Section 2 — pipeline board: every draft, one rail, deep-links
+   308→   308→   into the exact module where work continues.
+   309→   309→   ═══════════════════════════════════════════════════════════ */
+   310→   310→const RAIL_STAGES = [
+   311→   311→  { id: 'draft', label: 'Draft' },
+   312→   312→  { id: 'audit', label: 'Audit' },
+   313→   313→  { id: 'fix', label: 'Fix' },
+   314→   314→  { id: 'review', label: 'Review' },
+   315→   315→  { id: 'live', label: 'Live' },
+   316→   316→] as const
+   317→   317→
+   318→   318→function PipelineBoard() {
+   319→   319→  const { data } = useApp()
+   320→   320→  const drafts = data?.drafts ?? []
+   321→   321→
+   322→   322→  return (
+   323→   323→    <section aria-label="Draft pipeline">
+   324→   324→      <SectionHead
+   325→   325→        kicker="Continue where you left off"
+   326→   326→        title="The brand pipeline"
+   327→   327→        desc="Every draft rides the same rail — Draft → Audit → Fix → Review → Live. Open one and you land in the exact module where its work continues."
+   328→   328→      />
+   329→   329→      <div className="grid gap-3 lg:grid-cols-2">
+   330→   330→        {drafts.length === 0
+   331→   331→          ? [0, 1, 2].map((i) => (
+   332→   332→              <div
+   333→   333→                key={`sk-${i}`}
+   334→   334→                className="h-36 animate-pulse rounded-xl border border-zinc-200/60 bg-zinc-100/60"
+   335→   335→              />
+   336→   336→            ))
+   337→   337→          : drafts.map((d, i) => (
+   338→   338→              <PipelineCard
+   339→   339→                key={d.id}
+   340→   340→                draft={d}
+   341→   341→                audit={data?.audits[d.id]}
+   342→   342→                index={i}
+   343→   343→              />
+   344→   344→            ))}
+   345→   345→      </div>
+   346→   346→    </section>
+   347→   347→  )
+   348→   348→}
+   349→   349→
+   350→   350→function PipelineCard({
+   351→   351→  draft,
+   352→   352→  audit,
+   353→   353→  index,
+   354→   354→}: {
+   355→   355→  draft: DraftDTO
+   356→   356→  audit?: AuditResult
+   357→   357→  index: number
+   358→   358→}) {
+   359→   359→  const { selectDraft } = useApp()
+   360→   360→
+   361→   361→  const stages = RAIL_STAGES.map((s) => ({
+   362→   362→    ...s,
+   363→   363→    done:
+   364→   364→      s.id === 'draft'
+   365→   365→        ? true
+   366→   366→        : s.id === 'audit'
+   367→   367→          ? !!audit
+   368→   368→          : s.id === 'fix'
+   369→   369→            ? fixDone(draft)
+   370→   370→            : s.id === 'review'
+   371→   371→              ? reviewDone(draft)
+   372→   372→              : draft.status === 'APPROVED',
+   373→   373→  }))
+   374→   374→  const doneCount = stages.filter((s) => s.done).length
+   375→   375→  const allDone = doneCount === stages.length
+   376→   376→  const activeIdx = allDone ? -1 : doneCount
+   377→   377→  const fillPct = allDone ? 100 : ((doneCount - 1) / (stages.length - 1)) * 100
+   378→   378→  const nextStage = allDone ? null : stages[activeIdx]
+   379→   379→  const route = routeFor(draft)
+   380→   380→  const open = () => selectDraft(draft.id, route)
+   381→   381→
+   382→   382→  const approved = draft.status === 'APPROVED'
+   383→   383→  const scoreTone =
+   384→   384→    !audit || audit.score >= 85
+   385→   385→      ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+   386→   386→      : audit.score >= 60
+   387→   387→        ? 'text-amber-600 bg-amber-50 border-amber-200'
+   388→   388→        : 'text-rose-600 bg-rose-50 border-rose-200'
+   389→   389→
+   390→   390→  return (
+   391→   391→    <motion.article
+   392→   392→      initial={{ opacity: 0, y: 16 }}
+   393→   393→      animate={{ opacity: 1, y: 0 }}
+   394→   394→      transition={{ delay: 0.06 * index, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+   395→   395→      className="group cursor-pointer rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+   396→   396→      onClick={open}
+   397→   397→      onKeyDown={(e) => {
+   398→   398→        if (e.key === 'Enter' || e.key === ' ') {
+   399→   399→          e.preventDefault()
+   400→   400→          open()
+   401→   401→        }
+   402→   402→      }}
+   403→   403→      tabIndex={0}
+   404→   404→      role="button"
+   405→   405→      aria-label={`Open ${draft.title} in ${VIEW_LABEL[route]}`}
+   406→   406→    >
+   407→   407→      {/* header row */}
+   408→   408→      <div className="flex items-start justify-between gap-3">
+   409→   409→        <div className="flex min-w-0 items-start gap-3">
+   410→   410→          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-zinc-900 group-hover:text-white">
+   411→   411→            {draft.kind === 'image' ? (
+   412→   412→              <ImageIcon className="h-4 w-4" />
+   413→   413→            ) : (
+   414→   414→              <ScanSearch className="h-4 w-4" />
+   415→   415→            )}
+   416→   416→          </span>
+   417→   417→          <div className="min-w-0">
+   418→   418→            <h3 className="truncate text-sm font-bold leading-snug text-zinc-900">
+   419→   419→              {draft.title}
+   420→   420→            </h3>
+   421→   421→            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+   422→   422→              {draft.creator} · {draft.channel} · {draft.kind} · v{draft.version} ·{' '}
+   423→   423→              {timeAgo(draft.updatedAt)}
+   424→   424→            </p>
+   425→   425→          </div>
+   426→   426→        </div>
+   427→   427→        <div className="flex shrink-0 items-center gap-1.5">
+   428→   428→          {audit && approved ? (
+   429→   429→            <span
+   430→   430→              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-600"
+   431→   431→              title="Governed publication — tamper-evident certificate issued"
+   432→   432→            >
+   433→   433→              <BadgeCheck className="h-3 w-3" />
+   434→   434→              certified
+   435→   435→            </span>
+   436→   436→          ) : audit ? (
+   437→   437→            <span
+   438→   438→              className={cn(
+   439→   439→                'rounded-md border px-1.5 py-0.5 text-[11px] font-bold tabular-nums',
+   440→   440→                scoreTone
+   441→   441→              )}
+   442→   442→              title={`Latest audit score ${audit.score}/100`}
+   443→   443→            >
+   444→   444→              {audit.score}
+   445→   445→            </span>
+   446→   446→          ) : null}
+   447→   447→          <StatusChip status={draft.status} />
+   448→   448→        </div>
+   449→   449→      </div>
+   450→   450→
+   451→   451→      {/* rail */}
+   452→   452→      <div className="mt-4 px-1">
+   453→   453→        <div className="relative flex items-start justify-between">
+   454→   454→          {/* track */}
+   455→   455→          <span className="absolute left-6 right-6 top-[9px] h-[3px] rounded-full bg-zinc-200/80" />
+   456→   456→          <motion.span
+   457→   457→            className="absolute left-6 right-6 top-[9px] h-[3px] origin-left rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+   458→   458→            initial={{ scaleX: 0 }}
+   459→   459→            animate={{ scaleX: fillPct / 100 }}
+   460→   460→            transition={{ delay: 0.25 + 0.06 * index, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+   461→   461→          />
+   462→   462→          {stages.map((s, i) => {
+   463→   463→            const isActive = i === activeIdx
+   464→   464→            return (
+   465→   465→              <div key={s.id} className="relative z-10 flex w-12 flex-col items-center">
+   466→   466→                <span
+   467→   467→                  className={cn(
+   468→   468→                    'relative flex h-5 w-5 items-center justify-center rounded-full border-2 text-[9px] font-bold transition-all duration-300',
+   469→   469→                    s.done
+   470→   470→                      ? 'border-emerald-500 bg-emerald-500 text-white'
+   471→   471→                      : isActive
+   472→   472→                        ? 'border-emerald-400 bg-white text-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]'
+   473→   473→                        : 'border-zinc-300 bg-zinc-50 text-zinc-400'
+   474→   474→                  )}
+   475→   475→                >
+   476→   476→                  {isActive && (
+   477→   477→                  <span
+   478→   478→                    aria-hidden
+   479→   479→                    className="absolute inset-0 animate-ping rounded-full bg-emerald-400/40"
+   480→   480→                  />
+   481→   481→                )}
+   482→   482→                {s.done ? <Check className="h-3 w-3" strokeWidth={3.5} /> : i + 1}
+   483→   483→                </span>
+   484→   484→                <span
+   485→   485→                  className={cn(
+   486→   486→                    'mt-1.5 text-[10px] leading-tight',
+   487→   487→                    s.done
+   488→   488→                      ? 'font-semibold text-zinc-700'
+   489→   489→                      : isActive
+   490→   490→                        ? 'font-bold text-emerald-600'
+   491→   491→                        : 'text-zinc-400'
+   492→   492→                  )}
+   493→   493→                >
+   494→   494→                  {s.label}
+   495→   495→                </span>
+   496→   496→              </div>
+   497→   497→            )
+   498→   498→          })}
+   499→   499→        </div>
+   500→   500→      </div>
+   501→   501→
+   502→   502→      {/* footer row */}
+   503→   503→      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
+   504→   504→        <p className="min-w-0 truncate text-xs text-zinc-500">
+   505→   505→          {allDone ? (
+   506→   506→            <>
+   507→   507→              <span className="font-semibold text-emerald-600">Done:</span>{' '}
+   508→   508→              approved & certified — view the tamper-evident certificate
+   509→   509→            </>
+   510→   510→          ) : (
+   511→   511→            <>
+   512→   512→              <span className="font-semibold text-zinc-700">Next:</span>{' '}
+   513→   513→              {NEXT_HINT[nextStage!.id]}{' '}
+   514→   514→              <span className="text-zinc-400">· {VIEW_LABEL[route]}</span>
+   515→   515→            </>
+   516→   516→          )}
+   517→   517→        </p>
+   518→   518→        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-emerald-600 transition-all duration-200 group-hover:gap-2 group-hover:text-emerald-500">
+   519→   519→          Open <ArrowRight className="h-3.5 w-3.5" />
+   520→   520→        </span>
+   521→   521→      </div>
+   522→   522→    </motion.article>
+   523→   523→  )
+   524→   524→}
+   525→   525→
+   526→   526→/* ═══════════════════════════════════════════════════════════
+   527→   527→   Section 5 — interactive workflow rail (auto-advancing,
+   528→   528→   click any stage to explore the matching module)
+   529→   529→   ═══════════════════════════════════════════════════════════ */
+   530→   530→const STEPS: {
+   531→   531→  n: number
+   532→   532→  title: string
+   533→   533→  actor: string
+   534→   534→  desc: string
+   535→   535→  view: View
+   536→   536→}[] = [
+   537→   537→  {
+   538→   538→    n: 1,
+   539→   539→    title: 'Brand Vault Onboarding',
+   540→   540→    actor: 'Brand Manager',
+   541→   541→    desc: 'Voice rules, verified facts, terminology, colour tokens & assets indexed with unique clause IDs — the single source of truth every flag must cite.',
+   542→   542→    view: 'vault',
+   543→   543→  },
+   544→   544→  {
+   545→   545→    n: 2,
+   546→   546→    title: 'Multi-Format Submission',
+   547→   547→    actor: 'Creator',
+   548→   548→    desc: 'Text, Markdown, PNG/JPG visuals — with target channel selection. Submitting from the dashboard lands you here with the draft pre-selected.',
+   549→   549→    view: 'audit',
+   550→   550→  },
+   551→   551→  {
+   552→   552→    n: 3,
+   553→   553→    title: 'Parallel 6-Pillar Audit',
+   554→   554→    actor: 'VeriLoom Engine',
+   555→   555→    desc: 'Deterministic math (ΔE2000, WCAG 2.1) + citation-gated RAG run simultaneously — ungrounded AI flags are suppressed before a human ever sees them.',
+   556→   556→    view: 'audit',
+   557→   557→  },
+   558→   558→  {
+   559→   559→    n: 4,
+   560→   560→    title: 'Explainable Remediation',
+   561→   561→    actor: 'Creator',
+   562→   562→    desc: 'Every flag cites its clause. Accept surgical fixes or override with a written justification that flows into the Blindspot Engine.',
+   563→   563→    view: 'remediation',
+   564→   564→  },
+   565→   565→  {
+   566→   566→    n: 5,
+   567→   567→    title: 'Role-Based Sign-Off',
+   568→   568→    actor: 'Manager → Reviewer',
+   569→   569→    desc: 'Side-by-side diffs, threaded comments, RBAC state machine, formal approval. Managers pre-screen; only the Authorised Reviewer can sign off.',
+   570→   570→    view: 'review',
+   571→   571→  },
+   572→   572→  {
+   573→   573→    n: 6,
+   574→   574→    title: 'Governance Insights',
+   575→   575→    actor: 'Brand Leadership',
+   576→   576→    desc: 'Recurring mistakes, override clusters and ambiguous-guideline detection — the Vault learns from every human decision.',
+   577→   577→    view: 'analytics',
+   578→   578→  },
+   579→   579→]
+   580→   580→
+   581→   581→function WorkflowRail() {
+   582→   582→  const { setView } = useApp()
+   583→   583→  const [step, setStep] = useState(0)
+   584→   584→  const [playing, setPlaying] = useState(true)
+   585→   585→  const [hovering, setHovering] = useState(false)
+   586→   586→
+   587→   587→  useEffect(() => {
+   588→   588→    if (!playing || hovering) return
+   589→   589→    const id = setInterval(() => setStep((s) => (s + 1) % STEPS.length), 4200)
+   590→   590→    return () => clearInterval(id)
+   591→   591→  }, [playing, hovering])
+   592→   592→
+   593→   593→  const current = STEPS[step]
+   594→   594→  const fillPct = (step / (STEPS.length - 1)) * 100
+   595→   595→
+   596→   596→  return (
+   597→   597→    <section
+   598→   598→      aria-label="Governance workflow"
+   599→   599→      onPointerEnter={() => setHovering(true)}
+   600→   600→      onPointerLeave={() => setHovering(false)}
+   601→   601→    >
+   602→   602→      <SectionHead
+   603→   603→        kicker="How it works"
+   604→   604→        title="One workflow, six stages, three roles"
+   605→   605→        desc="The rail advances on its own — click any stage to hold it there and jump into the matching module."
+   606→   606→        right={
+   607→   607→          <button
+   608→   608→            type="button"
+   609→   609→            onClick={() => setPlaying((p) => !p)}
+   610→   610→            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:text-zinc-900"
+   611→   611→            aria-label={playing ? 'Pause auto-advance' : 'Resume auto-advance'}
+   612→   612→          >
+   613→   613→            {playing ? (
+   614→   614→              <Pause className="h-3 w-3" />
+   615→   615→            ) : (
+   616→   616→              <Play className="h-3 w-3" />
+   617→   617→            )}
+   618→   618→            {playing ? 'Auto' : 'Paused'}
+   619→   619→          </button>
+   620→   620→        }
+   621→   621→      />
+   622→   622→
+   623→   623→      <div className="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-6">
+   624→   624→        {/* the rail */}
+   625→   625→        <div className="relative flex items-start justify-between sm:px-1">
+   626→   626→          <span className="absolute left-7 right-7 top-[13px] h-[3px] rounded-full bg-zinc-200/80 sm:left-10 sm:right-10" />
+   627→   627→          <motion.span
+   628→   628→            className="absolute left-7 right-7 top-[13px] h-[3px] origin-left rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 sm:left-10 sm:right-10"
+   629→   629→            initial={false}
+   630→   630→            animate={{ scaleX: fillPct / 100 }}
+   631→   631→            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+   632→   632→          />
+   633→   633→          {STEPS.map((s, i) => {
+   634→   634→            const isActive = i === step
+   635→   635→            const isPast = i < step
+   636→   636→            return (
+   637→   637→              <button
+   638→   638→                key={s.n}
+   639→   639→                type="button"
+   640→   640→                onClick={() => {
+   641→   641→                  setStep(i)
+   642→   642→                  setPlaying(false)
+   643→   643→                }}
+   644→   644→                aria-current={isActive ? 'step' : undefined}
+   645→   645→                className="relative z-10 flex w-14 flex-col items-center outline-none sm:w-20"
+   646→   646→                title={s.title}
+   647→   647→              >
+   648→   648→                <motion.span
+   649→   649→                  animate={{ scale: isActive ? 1.18 : 1 }}
+   650→   650→                  transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+   651→   651→                  className={cn(
+   652→   652→                    'flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold transition-colors duration-300',
+   653→   653→                    isPast
+   654→   654→                      ? 'border-emerald-500 bg-emerald-500 text-white'
+   655→   655→                      : isActive
+   656→   656→                        ? 'border-emerald-400 bg-white text-emerald-600 shadow-[0_0_0_5px_rgba(16,185,129,0.2)]'
+   657→   657→                        : 'border-zinc-300 bg-zinc-50 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600'
+   658→   658→                  )}
+   659→   659→                >
+   660→   660→                  {isPast ? <Check className="h-3.5 w-3.5" strokeWidth={3.5} /> : s.n}
+   661→   661→                </motion.span>
+   662→   662→                <span
+   663→   663→                  className={cn(
+   664→   664→                    'mt-2 hidden text-center text-[10.5px] leading-tight sm:block',
+   665→   665→                    isActive
+   666→   666→                      ? 'font-bold text-emerald-600'
+   667→   667→                      : isPast
+   668→   668→                        ? 'font-semibold text-zinc-600'
+   669→   669→                        : 'text-zinc-400'
+   670→   670→                  )}
+   671→   671→                >
+   672→   672→                  {s.title.split(' ').slice(0, 2).join(' ')}
+   673→   673→                </span>
+   674→   674→              </button>
+   675→   675→            )
+   676→   676→          })}
+   677→   677→        </div>
+   678→   678→
+   679→   679→        {/* detail panel */}
+   680→   680→        <AnimatePresence mode="wait">
+   681→   681→          <motion.div
+   682→   682→            key={step}
+   683→   683→            initial={{ opacity: 0, x: 16 }}
+   684→   684→            animate={{ opacity: 1, x: 0 }}
+   685→   685→            exit={{ opacity: 0, x: -16 }}
+   686→   686→            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+   687→   687→            className="mt-6 rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 sm:p-5"
+   688→   688→          >
+   689→   689→            <div className="flex flex-wrap items-start justify-between gap-3">
+   690→   690→              <div className="min-w-0">
+   691→   691→                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+   692→   692→                  Stage {current.n} of {STEPS.length} · {current.actor}
+   693→   693→                </p>
+   694→   694→                <h3 className="mt-1 text-base font-bold tracking-tight text-zinc-900">
+   695→   695→                  {current.title}
+   696→   696→                </h3>
+   697→   697→                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">
+   698→   698→                  {current.desc}
+   699→   699→                </p>
+   700→   700→              </div>
+   701→   701→              <Button
+   702→   702→                size="sm"
+   703→   703→                variant="outline"
+   704→   704→                className="shrink-0 border-zinc-300 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+   705→   705→                onClick={() => setView(current.view)}
+   706→   706→              >
+   707→   707→                Open {VIEW_LABEL[current.view]}
+   708→   708→                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+   709→   709→              </Button>
+   710→   710→            </div>
+   711→   711→          </motion.div>
+   712→   712→        </AnimatePresence>
+   713→   713→      </div>
+   714→   714→    </section>
+   715→   715→  )
+   716→   716→}
+   717→   717→
+   718→   718→/* ═══════════════════════════════════════════════════════════
+   719→   719→   Shared bits
+   720→   720→   ═══════════════════════════════════════════════════════════ */
+   721→   721→function SectionHead({
+   722→   722→  kicker,
+   723→   723→  title,
+   724→   724→  desc,
+   725→   725→  right,
+   726→   726→}: {
+   727→   727→  kicker: string
+   728→   728→  title: string
+   729→   729→  desc?: string
+   730→   730→  right?: React.ReactNode
+   731→   731→}) {
+   732→   732→  return (
+   733→   733→    <motion.div
+   734→   734→      initial={{ opacity: 0, y: 10 }}
+   735→   735→      whileInView={{ opacity: 1, y: 0 }}
+   736→   736→      viewport={{ once: true, margin: '-40px' }}
+   737→   737→      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+   738→   738→      className="mb-3.5 flex flex-wrap items-end justify-between gap-3"
+   739→   739→    >
+   740→   740→      <div className="min-w-0">
+   741→   741→        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
+   742→   742→          {kicker}
+   743→   743→        </p>
+   744→   744→        <h2 className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900">{title}</h2>
+   745→   745→        {desc && (
+   746→   746→          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-500">{desc}</p>
+   747→   747→        )}
+   748→   748→      </div>
+   749→   749→      {right}
+   750→   750→    </motion.div>
+   751→   751→  )
+   752→   752→}
+   753→   753→
+   754→   754→function EngineCard({
+   755→   755→  icon: Icon,
+   756→   756→  title,
+   757→   757→  body,
+   758→   758→  engines,
+   759→   759→}: {
+   760→   760→  icon: React.ComponentType<{ className?: string }>
+   761→   761→  title: string
+   762→   762→  body: string
+   763→   763→  engines: ('deterministic' | 'rag' | 'hybrid' | 'vlm')[]
+   764→   764→}) {
+   765→   765→  return (
+   766→   766→    <div className="group vl-lift rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-zinc-300">
+   767→   767→      <div className="flex items-center gap-2.5">
+   768→   768→        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-emerald-50 group-hover:text-emerald-600">
+   769→   769→          <Icon className="h-4 w-4" />
+   770→   770→        </span>
+   771→   771→        <h3 className="text-sm font-bold text-zinc-900">{title}</h3>
+   772→   772→      </div>
+   773→   773→      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{body}</p>
+   774→   774→      {engines.length > 0 && (
+   775→   775→        <div className="mt-2.5 flex flex-wrap gap-1.5">
+   776→   776→          {engines.map((e) => (
+   777→   777→            <EngineChip key={e} engine={e} />
+   778→   778→          ))}
+   779→   779→        </div>
+   780→   780→      )}
+   781→   781→    </div>
+   782→   782→  )
+   783→   783→}
+   784→   784→
+   785→   785→function ActivityTimeline() {
+   786→   786→  const { data } = useApp()
+   787→   787→  const events = useMemo(() => (data?.events ?? []).slice(0, 14), [data])
+   788→   788→
+   789→   789→  return (
+   790→   790→    <div className="max-h-[430px] overflow-y-auto rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm vl-scroll">
+   791→   791→      {events.length === 0 ? (
+   792→   792→        <p className="p-6 text-center text-xs text-zinc-400">
+   793→   793→          No activity yet — run your first audit.
+   794→   794→        </p>
+   795→   795→      ) : (
+   796→   796→        <ol className="relative space-y-1">
+   797→   797→          <span
+   798→   798→            aria-hidden
+   799→   799→            className="absolute bottom-2 left-[6.5px] top-2 w-px bg-zinc-200"
+   800→   800→          />
+   801→   801→          {events.map((e, i) => (
+   802→   802→            <motion.li
+   803→   803→              key={e.id}
+   804→   804→              initial={{ opacity: 0, x: -10 }}
+   805→   805→              whileInView={{ opacity: 1, x: 0 }}
+   806→   806→              viewport={{ once: true }}
+   807→   807→              transition={{ delay: Math.min(i * 0.04, 0.3), duration: 0.35 }}
+   808→   808→              className="relative rounded-lg px-2 py-1.5 pl-6 transition-colors hover:bg-zinc-50"
+   809→   809→            >
+   810→   810→              <span
+   811→   811→                className={cn(
+   812→   812→                  'absolute left-0 top-[13px] h-3 w-3 rounded-full border-2 border-white',
+   813→   813→                  e.action === 'AI_CALL' && 'bg-teal-400',
+   814→   814→                  e.action === 'AUDIT_RUN' && 'bg-emerald-500',
+   815→   815→                  e.action === 'OVERRIDE' && 'bg-amber-500',
+   816→   816→                  e.action === 'STATUS_CHANGE' && 'bg-zinc-400',
+   817→   817→                  e.action === 'CERT_ISSUED' && 'bg-emerald-600',
+   818→   818→                  e.action.startsWith('VAULT') && 'bg-zinc-700'
+   819→   819→                )}
+   820→   820→              />
+   821→   821→              <p className="truncate text-xs font-medium text-zinc-800">
+   822→   822→                {describeEvent(e.action, e.details)}
+   823→   823→              </p>
+   824→   824→              <p className="text-[10.5px] text-zinc-400">
+   825→   825→                {e.actor} · {timeAgo(e.createdAt)}
+   826→   826→              </p>
+   827→   827→            </motion.li>
+   828→   828→          ))}
+   829→   829→        </ol>
+   830→   830→      )}
+   831→   831→    </div>
+   832→   832→  )
+   833→   833→}
+   834→   834→
+   835→   835→function describeEvent(action: string, details: Record<string, unknown>): string {
+   836→   836→  switch (action) {
+   837→   837→    case 'AUDIT_RUN':
+   838→   838→      return `6-pillar audit completed — score ${details.score}, ${details.findings} findings (${details.suppressed} suppressed)`
+   839→   839→    case 'AI_CALL':
+   840→   840→      return `AI call: ${String(details.purpose ?? 'inference').slice(0, 70)}`
+   841→   841→    case 'OVERRIDE':
+   842→   842→      return `Human override on ${details.findingKey} — “${String(details.justification ?? '').slice(0, 48)}…”`
+   843→   843→    case 'STATUS_CHANGE':
+   844→   844→      return `Status: ${details.from ?? '∅'} → ${details.to}`
+   845→   845→    case 'CERT_ISSUED':
+   846→   846→      return 'Compliance certificate issued'
+   847→   847→    case 'VAULT_INIT':
+   848→   848→      return String(details.message ?? 'Vault initialised')
+   849→   849→    case 'VAULT_EDIT':
+   850→   850→      return `Vault clause ${details.verb} — ${details.clauseId}`
+   851→   851→    case 'ACCEPT':
+   852→   852→      return `Finding ${details.findingKey} accepted`
+   853→   853→    default:
+   854→   854→      return action
+   855→   855→  }
+   856→   856→}
+   857→   857→

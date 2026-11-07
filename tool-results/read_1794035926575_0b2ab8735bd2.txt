@@ -1,0 +1,931 @@
+     1→'use client'
+     2→
+     3→// ─────────────────────────────────────────────────────────────
+     4→// VeriLoom AI — Audit Studio
+     5→// Draft submission + parallel 6-pillar audit with results.
+     6→// ─────────────────────────────────────────────────────────────
+     7→import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     8→import { motion, AnimatePresence } from 'framer-motion'
+     9→import {
+    10→  ScanSearch,
+    11→  Plus,
+    12→  FileText,
+    13→  ImageIcon,
+    14→  Loader2,
+    15→  CheckCircle2,
+    16→  XCircle,
+    17→  MinusCircle,
+    18→  ShieldCheck,
+    19→  ChevronDown,
+    20→  WandSparkles,
+    21→  EyeOff,
+    22→  Cpu,
+    23→  Send,
+    24→  Upload,
+    25→  CircleDot,
+    26→} from 'lucide-react'
+    27→import { useApp, roleIdentity } from '@/lib/store'
+    28→import { liveScan } from '@/lib/live-check'
+    29→import { LiveTextarea, LiveStatusStrip } from './live-editor'
+    30→import {
+    31→  PILLAR_META,
+    32→  type AuditResult,
+    33→  type DraftDTO,
+    34→  type Finding,
+    35→  type ImageMeta,
+    36→  type Pillar,
+    37→  type PillarSummary,
+    38→} from '@/lib/types'
+    39→import { extractPaletteFromPixels } from '@/lib/palette'
+    40→import {
+    41→  ClauseBadge,
+    42→  CitationCard,
+    43→  EngineChip,
+    44→  HexSwatch,
+    45→  ScoreRing,
+    46→  SeverityChip,
+    47→  StatusChip,
+    48→  ViewHeader,
+    49→} from './shared'
+    50→import { Button } from '@/components/ui/button'
+    51→import { Input } from '@/components/ui/input'
+    52→import { Label } from '@/components/ui/label'
+    53→import { Textarea } from '@/components/ui/textarea'
+    54→import {
+    55→  Dialog,
+    56→  DialogContent,
+    57→  DialogDescription,
+    58→  DialogFooter,
+    59→  DialogHeader,
+    60→  DialogTitle,
+    61→} from '@/components/ui/dialog'
+    62→import {
+    63→  Select,
+    64→  SelectContent,
+    65→  SelectItem,
+    66→  SelectTrigger,
+    67→  SelectValue,
+    68→} from '@/components/ui/select'
+    69→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    70→import { toast } from '@/hooks/use-toast'
+    71→import { cn } from '@/lib/utils'
+    72→
+    73→export function AuditStudioView() {
+    74→  const { data, selectedDraftId, selectDraft, refresh, role } = useApp()
+    75→  const drafts = data?.drafts ?? []
+    76→  const selected = drafts.find((d) => d.id === selectedDraftId) ?? null
+    77→  const audit = selectedDraftId ? data?.audits[selectedDraftId] : undefined
+    78→
+    79→  return (
+    80→    <div className="space-y-5">
+    81→      <ViewHeader
+    82→        crumb="Audit Studio"
+    83→        title="Audit Studio"
+    84→        subtitle="Submit text or visuals and run the parallel 6-pillar audit — deterministic math and citation-gated AI, side by side."
+    85→      />
+    86→      <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+    87→      {/* draft list */}
+    88→      <div className="space-y-3">
+    89→        <div className="flex items-center justify-between">
+    90→          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">
+    91→            Drafts
+    92→          </h2>
+    93→          <NewDraftButton />
+    94→        </div>
+    95→        <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
+    96→          {drafts.map((d) => (
+    97→            <button
+    98→              key={d.id}
+    99→              onClick={() => selectDraft(d.id)}
+   100→              className={cn(
+   101→                'w-full rounded-xl border p-3 text-left transition-colors',
+   102→                d.id === selectedDraftId
+   103→                  ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
+   104→                  : 'border-zinc-200 bg-white hover:border-zinc-300'
+   105→              )}
+   106→            >
+   107→              <div className="flex items-center justify-between gap-2">
+   108→                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+   109→                  {d.kind === 'image' ? (
+   110→                    <ImageIcon className="h-3.5 w-3.5" />
+   111→                  ) : (
+   112→                    <FileText className="h-3.5 w-3.5" />
+   113→                  )}
+   114→                  {d.channel} · v{d.version}
+   115→                </span>
+   116→                <StatusChip status={d.status} />
+   117→              </div>
+   118→              <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
+   119→                {d.title}
+   120→              </p>
+   121→              <p className="mt-0.5 text-[11px] text-zinc-400">by {d.creator}</p>
+   122→            </button>
+   123→          ))}
+   124→        </div>
+   125→      </div>
+   126→
+   127→      {/* main panel */}
+   128→      <div>
+   129→        {!selected ? (
+   130→          <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
+   131→            <ScanSearch className="h-10 w-10 text-zinc-300" />
+   132→            <p className="mt-3 text-sm font-semibold text-zinc-600">
+   133→              Select a draft to audit
+   134→            </p>
+   135→            <p className="mt-1 max-w-sm text-xs text-zinc-400">
+   136→              Or create a new one — paste campaign copy or upload a promotional image,
+   137→              then run the parallel 6-pillar pre-flight audit.
+   138→            </p>
+   139→          </div>
+   140→        ) : (
+   141→          <DraftPanel
+   142→            draft={selected}
+   143→            audit={audit ?? null}
+   144→            onAuditDone={refresh}
+   145→            actor={roleIdentity(role).name}
+   146→          />
+   147→        )}
+   148→      </div>
+   149→      </div>
+   150→    </div>
+   151→  )
+   152→}
+   153→
+   154→// ── Draft panel ──────────────────────────────────────────────
+   155→
+   156→function DraftPanel({
+   157→  draft,
+   158→  audit,
+   159→  onAuditDone,
+   160→  actor,
+   161→}: {
+   162→  draft: DraftDTO
+   163→  audit: AuditResult | null
+   164→  onAuditDone: () => Promise<void>
+   165→  actor: string
+   166→}) {
+   167→  const { selectDraft, setView, data, autoAuditId, setAutoAudit } = useApp()
+   168→  const [running, setRunning] = useState(false)
+   169→  const [stage, setStage] = useState(0) // 0 idle, 1..6 pillar animation
+   170→  const [result, setResult] = useState<AuditResult | null>(audit)
+   171→  const [content, setContent] = useState(draft.content)
+   172→  const [altText, setAltText] = useState(draft.imageMeta?.altText ?? '')
+   173→  const [showRedacted, setShowRedacted] = useState(false)
+   174→  const runToken = useRef(0)
+   175→  const autoRunDone = useRef<string | null>(null)
+   176→
+   177→  useEffect(() => {
+   178→    setResult(audit)
+   179→    setContent(draft.content)
+   180→    setAltText(draft.imageMeta?.altText ?? '')
+   181→  }, [draft.id, draft.version, draft.content, audit])
+   182→
+   183→  const dirty =
+   184→    draft.kind === 'text' ? content !== draft.content : altText !== (draft.imageMeta?.altText ?? '')
+   185→
+   186→  const saveEdits = async () => {
+   187→    const res = await fetch(`/api/drafts/${draft.id}`, {
+   188→      method: 'PATCH',
+   189→      headers: { 'Content-Type': 'application/json' },
+   190→      body: JSON.stringify(draft.kind === 'text' ? { content, actor } : { altText, actor }),
+   191→    })
+   192→    if (!res.ok) {
+   193→      toast({ title: 'Save failed', description: (await res.json()).error, variant: 'destructive' })
+   194→      return false
+   195→    }
+   196→    await onAuditDone()
+   197→    toast({ title: 'Draft saved', description: 'Content changed — re-run the audit before publishing.' })
+   198→    return true
+   199→  }
+   200→
+   201→  const runAudit = async () => {
+   202→    if (dirty) {
+   203→      const ok = await saveEdits()
+   204→      if (!ok) return
+   205→    }
+   206→    setRunning(true)
+   207→    setResult(null)
+   208→    setStage(1)
+   209→    const token = ++runToken.current
+   210→
+   211→    // staged pillar animation while the engine runs
+   212→    const timer = setInterval(() => {
+   213→      setStage((s) => (s < 6 ? s + 1 : s))
+   214→    }, 500)
+   215→
+   216→    try {
+   217→      const res = await fetch('/api/audit', {
+   218→        method: 'POST',
+   219→        headers: { 'Content-Type': 'application/json' },
+   220→        body: JSON.stringify({ draftId: draft.id, actor }),
+   221→      })
+   222→      const body = await res.json()
+   223→      if (!res.ok) throw new Error(body.error ?? 'Audit failed')
+   224→      if (token !== runToken.current) return
+   225→      clearInterval(timer)
+   226→      setStage(6)
+   227→      // small delay so the last pillar animation completes
+   228→      await new Promise((r) => setTimeout(r, 450))
+   229→      setResult(body.audit as AuditResult)
+   230→      await onAuditDone()
+   231→      toast({
+   232→        title: `Audit complete — compliance score ${body.audit.score}/100`,
+   233→        description: `${body.audit.findings.length} findings · ${body.audit.suppressed} ungrounded AI flags suppressed`,
+   234→      })
+   235→    } catch (err) {
+   236→      clearInterval(timer)
+   237→      toast({
+   238→        title: 'Audit failed',
+   239→        description: err instanceof Error ? err.message : 'Unknown error',
+   240→        variant: 'destructive',
+   241→      })
+   242→    } finally {
+   243→      if (token === runToken.current) {
+   244→        setRunning(false)
+   245→        setStage(0)
+   246→      }
+   247→    }
+   248→  }
+   249→
+   250→  const editable = ['DRAFT', 'CHANGES_REQUESTED', 'AUDITED'].includes(draft.status)
+   251→
+   252→  // instant client-side scan of whatever is currently in the editor
+   253→  const live = useMemo(
+   254→    () => liveScan(draft.kind === 'text' ? content : '', data?.vault ?? []),
+   255→    [content, data?.vault, draft.kind]
+   256→  )
+   257→
+   258→  // a draft born in the Live Playground auto-runs the full engine on arrival
+   259→  useEffect(() => {
+   260→    if (
+   261→      autoAuditId &&
+   262→      autoAuditId === draft.id &&
+   263→      autoRunDone.current !== draft.id &&
+   264→      draft.status === 'DRAFT'
+   265→    ) {
+   266→      autoRunDone.current = draft.id
+   267→      setAutoAudit(null)
+   268→      void runAudit()
+   269→    }
+   270→  }, [autoAuditId, draft.id, draft.status])
+   271→
+   272→  return (
+   273→    <div className="space-y-4">
+   274→      {/* header */}
+   275→      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+   276→        <div className="flex flex-wrap items-start justify-between gap-3">
+   277→          <div className="min-w-0">
+   278→            <div className="flex flex-wrap items-center gap-2">
+   279→              <StatusChip status={draft.status} />
+   280→              <span className="text-[11px] font-semibold text-zinc-500">
+   281→                {draft.channel} · v{draft.version} · {draft.creator}
+   282→              </span>
+   283→            </div>
+   284→            <h1 className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">
+   285→              {draft.title}
+   286→            </h1>
+   287→          </div>
+   288→          <div className="flex items-center gap-2">
+   289→            {dirty && editable && (
+   290→              <Button variant="outline" size="sm" onClick={saveEdits}>
+   291→                Save draft
+   292→              </Button>
+   293→            )}
+   294→            <Button
+   295→              onClick={runAudit}
+   296→              disabled={running || draft.status === 'APPROVED'}
+   297→              className="bg-emerald-600 hover:bg-emerald-500"
+   298→            >
+   299→              {running ? (
+   300→                <>
+   301→                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Auditing…
+   302→                </>
+   303→              ) : (
+   304→                <>
+   305→                  <ScanSearch className="mr-2 h-4 w-4" /> Run 6-Pillar Audit
+   306→                </>
+   307→              )}
+   308→            </Button>
+   309→          </div>
+   310→        </div>
+   311→      </div>
+   312→
+   313→      {/* content editor */}
+   314→      {draft.kind === 'text' ? (
+   315→        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+   316→          <div className="mb-2 flex items-center justify-between">
+   317→            <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+   318→              Draft copy
+   319→            </Label>
+   320→            <span className="text-[11px] text-zinc-400">
+   321→              {content.trim().split(/\s+/).filter(Boolean).length} words
+   322→            </span>
+   323→          </div>
+   324→          <LiveTextarea
+   325→            value={content}
+   326→            onChange={setContent}
+   327→            hits={live.hits}
+   328→            disabled={!editable || running}
+   329→            minHeightClass="min-h-[220px]"
+   330→            placeholder="Paste the campaign copy…"
+   331→          />
+   332→          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2.5">
+   333→            <LiveStatusStrip counts={live.counts} total={live.total} />
+   334→            <span className="shrink-0 text-[10.5px] text-zinc-400">
+   335→              live scan · deterministic · in-browser
+   336→            </span>
+   337→          </div>
+   338→        </div>
+   339→      ) : (
+   340→        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+   341→          <div className="mb-2 flex items-center justify-between">
+   342→            <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+   343→              Promotional asset
+   344→            </Label>
+   345→            <span className="text-[11px] text-zinc-400">
+   346→              {draft.imageMeta?.width}×{draft.imageMeta?.height}px
+   347→            </span>
+   348→          </div>
+   349→          <div className="grid gap-4 sm:grid-cols-[minmax(0,320px)_1fr]">
+   350→            {draft.imageData && (
+   351→              <img
+   352→                src={draft.imageData}
+   353→                alt={draft.title}
+   354→                className="w-full rounded-lg border border-zinc-200 object-contain"
+   355→              />
+   356→            )}
+   357→            <div className="space-y-3">
+   358→              <div>
+   359→                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+   360→                  Extracted palette (client-side, pre-upload)
+   361→                </p>
+   362→                <div className="mt-1.5 flex flex-wrap gap-1.5">
+   363→                  {(draft.imageMeta?.palette ?? []).map((s) => (
+   364→                    <span
+   365→                      key={s.hex}
+   366→                      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-[11px] font-semibold text-zinc-700"
+   367→                    >
+   368→                      <HexSwatch hex={s.hex} size={14} />
+   369→                      {s.hex} · {(s.ratio * 100).toFixed(0)}%
+   370→                    </span>
+   371→                  ))}
+   372→                </div>
+   373→              </div>
+   374→              <div>
+   375→                <Label className="text-xs">Alt text {altText ? '' : '(missing — will be flagged)'}</Label>
+   376→                <Input
+   377→                  className="mt-1 text-xs"
+   378→                  value={altText}
+   379→                  onChange={(e) => setAltText(e.target.value)}
+   380→                  disabled={!editable || running}
+   381→                  placeholder="Describe the image for screen readers…"
+   382→                />
+   383→              </div>
+   384→            </div>
+   385→          </div>
+   386→        </div>
+   387→      )}
+   388→
+   389→      {/* live pillar animation */}
+   390→      <AnimatePresence>
+   391→        {running && <PillarProgress stage={stage} kind={draft.kind} />}
+   392→      </AnimatePresence>
+   393→
+   394→      {/* results */}
+   395→      {result && (
+   396→        <AuditResultPanel
+   397→          result={result}
+   398→          draft={draft}
+   399→          onGoRemediate={() => {
+   400→            selectDraft(draft.id, 'remediation')
+   401→            setView('remediation')
+   402→          }}
+   403→          showRedacted={showRedacted}
+   404→          onToggleRedacted={() => setShowRedacted((s) => !s)}
+   405→        />
+   406→      )}
+   407→    </div>
+   408→  )
+   409→}
+   410→
+   411→function PillarProgress({ stage, kind }: { stage: number; kind: string }) {
+   412→  const pillars: Pillar[] = ['tone', 'terminology', 'claims', 'visual', 'accessibility', 'confidentiality']
+   413→  return (
+   414→    <motion.div
+   415→      initial={{ opacity: 0, y: 8 }}
+   416→      animate={{ opacity: 1, y: 0 }}
+   417→      exit={{ opacity: 0 }}
+   418→      className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4"
+   419→    >
+   420→      <p className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+   421→        <Loader2 className="h-4 w-4 animate-spin" />
+   422→        Parallel 6-pillar engine running — deterministic math & citation-gated RAG…
+   423→      </p>
+   424→      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+   425→        {pillars.map((p, i) => {
+   426→          const state = i < stage ? 'running' : 'queued'
+   427→          return (
+   428→            <div
+   429→              key={p}
+   430→              className={cn(
+   431→                'flex items-center gap-2 rounded-lg border px-2.5 py-2 text-[11px] font-semibold',
+   432→                state === 'running'
+   433→                  ? 'border-emerald-300 bg-white text-emerald-800'
+   434→                  : 'border-zinc-200 bg-white/60 text-zinc-400'
+   435→              )}
+   436→            >
+   437→              {state === 'running' ? (
+   438→                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500" />
+   439→              ) : (
+   440→                <CircleDot className="h-3.5 w-3.5 shrink-0 text-zinc-300" />
+   441→              )}
+   442→              {PILLAR_META[p].short}
+   443→              {kind === 'text' && ['visual', 'accessibility'].includes(p) && (
+   444→                <span className="text-[9px] font-normal text-zinc-400">(n/a)</span>
+   445→              )}
+   446→            </div>
+   447→          )
+   448→        })}
+   449→      </div>
+   450→    </motion.div>
+   451→  )
+   452→}
+   453→
+   454→// ── Audit result ─────────────────────────────────────────────
+   455→
+   456→function AuditResultPanel({
+   457→  result,
+   458→  draft,
+   459→  onGoRemediate,
+   460→  showRedacted,
+   461→  onToggleRedacted,
+   462→}: {
+   463→  result: AuditResult
+   464→  draft: DraftDTO
+   465→  onGoRemediate: () => void
+   466→  showRedacted: boolean
+   467→  onToggleRedacted: () => void
+   468→}) {
+   469→  const verdict =
+   470→    result.score >= 85
+   471→      ? { text: 'Ready to publish', cls: 'text-emerald-600' }
+   472→      : result.score >= 60
+   473→        ? { text: 'Minor fixes recommended', cls: 'text-amber-600' }
+   474→        : { text: 'Must not ship as-is', cls: 'text-rose-600' }
+   475→
+   476→  return (
+   477→    <motion.div
+   478→      initial={{ opacity: 0, y: 12 }}
+   479→      animate={{ opacity: 1, y: 0 }}
+   480→      className="space-y-4"
+   481→    >
+   482→      {/* score + pillars */}
+   483→      <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+   484→        <div className="flex flex-wrap items-center gap-6">
+   485→          <div className="flex items-center gap-5">
+   486→            <ScoreRing score={result.score} />
+   487→            <div>
+   488→              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+   489→                Compliance verdict
+   490→              </p>
+   491→              <p className={cn('text-xl font-bold', verdict.cls)}>{verdict.text}</p>
+   492→              <p className="mt-1 text-xs text-zinc-500">
+   493→                {result.findings.length} findings ·{' '}
+   494→                {result.findings.filter((f) => f.severity === 'critical').length} critical
+   495→              </p>
+   496→              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+   497→                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10.5px] font-semibold text-emerald-700">
+   498→                  <ShieldCheck className="h-3 w-3" />
+   499→                  Zero-hallucination guard: {result.suppressed} ungrounded AI flag
+   500→                  {result.suppressed === 1 ? '' : 's'} suppressed
+   501→                </span>
+   502→                {result.aiLedger.map((l, i) => (
+   503→                  <span
+   504→                    key={i}
+   505→                    className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[10.5px] font-semibold text-teal-700"
+   506→                    title={l.purpose}
+   507→                  >
+   508→                    <Cpu className="h-3 w-3" /> {l.model}
+   509→                  </span>
+   510→                ))}
+   511→              </div>
+   512→            </div>
+   513→          </div>
+   514→          <div className="ml-auto flex flex-col items-end gap-2">
+   515→            <span className="text-[11px] text-zinc-400">
+   516→              Audit of v{result.version} · {new Date(result.createdAt).toLocaleString()}
+   517→            </span>
+   518→            <Button onClick={onGoRemediate} className="bg-zinc-900 hover:bg-zinc-800">
+   519→              <WandSparkles className="mr-2 h-4 w-4" />
+   520→              Open Remediation Studio
+   521→            </Button>
+   522→          </div>
+   523→        </div>
+   524→
+   525→        {/* pillar grid */}
+   526→        <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+   527→          {result.pillars.map((p) => (
+   528→            <PillarCard key={p.pillar} summary={p} />
+   529→          ))}
+   530→        </div>
+   531→      </div>
+   532→
+   533→      {/* redaction preview */}
+   534→      {result.redactedPreview && draft.kind === 'text' && (
+   535→        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+   536→          <button
+   537→            onClick={onToggleRedacted}
+   538→            className="flex w-full items-center justify-between text-left"
+   539→          >
+   540→            <span className="flex items-center gap-2 text-sm font-bold text-zinc-900">
+   541→              <EyeOff className="h-4 w-4 text-zinc-500" />
+   542→              Confidentiality sandbox — what the AI actually received
+   543→            </span>
+   544→            <ChevronDown
+   545→              className={cn('h-4 w-4 text-zinc-400 transition-transform', showRedacted && 'rotate-180')}
+   546→            />
+   547→          </button>
+   548→          {showRedacted && (
+   549→            <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-950 p-3.5 font-mono text-[12px] leading-relaxed text-zinc-300">
+   550→              {result.redactedPreview.split('\n').map((line, i) => (
+   551→                <p key={i} className="min-h-[1.2em] whitespace-pre-wrap">
+   552→                  {line.split(/(█+)/).map((part, j) =>
+   553→                    part.startsWith('█') ? (
+   554→                      <mark key={j} className="rounded bg-amber-400/30 px-0.5 text-amber-300">
+   555→                        {part}
+   556→                      </mark>
+   557→                    ) : (
+   558→                      <span key={j}>{part}</span>
+   559→                    )
+   560→                  )}
+   561→                </p>
+   562→              ))}
+   563→            </div>
+   564→          )}
+   565→        </div>
+   566→      )}
+   567→
+   568→      {/* findings */}
+   569→      <div>
+   570→        <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-zinc-500">
+   571→          Findings ({result.findings.length})
+   572→        </h3>
+   573→        <div className="space-y-2.5">
+   574→          {result.findings.length === 0 && (
+   575→            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-6 text-center">
+   576→              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
+   577→              <p className="mt-2 text-sm font-semibold text-emerald-800">
+   578→                Clean across all six pillars.
+   579→              </p>
+   580→            </div>
+   581→          )}
+   582→          {result.findings.map((f) => (
+   583→            <FindingCard key={f.key} finding={f} defaultOpen={f.severity === 'critical'} />
+   584→          ))}
+   585→        </div>
+   586→      </div>
+   587→    </motion.div>
+   588→  )
+   589→}
+   590→
+   591→function PillarCard({ summary }: { summary: PillarSummary }) {
+   592→  const meta = PILLAR_META[summary.pillar]
+   593→  const statusIcon =
+   594→    summary.status === 'pass' ? (
+   595→      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+   596→    ) : summary.status === 'skipped' ? (
+   597→      <MinusCircle className="h-4 w-4 text-zinc-300" />
+   598→    ) : summary.status === 'warn' ? (
+   599→      <CircleDot className="h-4 w-4 text-amber-500" />
+   600→    ) : (
+   601→      <XCircle className="h-4 w-4 text-rose-500" />
+   602→    )
+   603→  return (
+   604→    <div
+   605→      className={cn(
+   606→        'rounded-lg border p-2.5',
+   607→        summary.status === 'skipped' ? 'border-zinc-100 bg-zinc-50/60 opacity-70' : 'border-zinc-200 bg-white'
+   608→      )}
+   609→    >
+   610→      <div className="flex items-center justify-between gap-1">
+   611→        <p className="truncate text-[11px] font-bold text-zinc-800">{meta.short}</p>
+   612→        {statusIcon}
+   613→      </div>
+   614→      <div className="mt-1.5 flex items-center gap-1">
+   615→        <EngineChip engine={summary.engine} />
+   616→      </div>
+   617→      <p className="mt-1.5 text-[10.5px] leading-snug text-zinc-400">
+   618→        {summary.status === 'skipped'
+   619→          ? meta.desc
+   620→          : `${summary.critical}C · ${summary.warning}W · ${summary.info}I · ${summary.durationMs}ms`}
+   621→      </p>
+   622→      <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-zinc-400/80">
+   623→        {summary.detail}
+   624→      </p>
+   625→    </div>
+   626→  )
+   627→}
+   628→
+   629→export function FindingCard({
+   630→  finding,
+   631→  defaultOpen = false,
+   632→  actions,
+   633→}: {
+   634→  finding: Finding
+   635→  defaultOpen?: boolean
+   636→  actions?: React.ReactNode
+   637→}) {
+   638→  const [open, setOpen] = useState(defaultOpen)
+   639→  const m = (finding.meta ?? {}) as Record<string, unknown>
+   640→
+   641→  return (
+   642→    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+   643→      <button
+   644→        onClick={() => setOpen((o) => !o)}
+   645→        className="flex w-full items-start justify-between gap-3 p-3.5 text-left hover:bg-zinc-50/60"
+   646→      >
+   647→        <div className="flex min-w-0 items-start gap-3">
+   648→          <div className="mt-0.5 flex flex-col items-center gap-1">
+   649→            <SeverityChip severity={finding.severity} />
+   650→          </div>
+   651→          <div className="min-w-0">
+   652→            <p className="text-sm font-semibold leading-snug text-zinc-900">
+   653→              {finding.title}
+   654→            </p>
+   655→            {finding.quote && (
+   656→              <p className="mt-1 truncate rounded-md bg-zinc-100 px-2 py-1 font-mono text-[11.5px] text-zinc-600">
+   657→                “{finding.quote}”
+   658→              </p>
+   659→            )}
+   660→            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+   661→              <EngineChip engine={finding.engine} />
+   662→              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-zinc-400">
+   663→                {PILLAR_META[finding.pillar].short}
+   664→              </span>
+   665→              <ClauseBadge clauseId={finding.clauseId ?? '—'} />
+   666→              {typeof m.deltaE === 'number' && (
+   667→                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-rose-700">
+   668→                  ΔE {m.deltaE} vs {String(m.closest)} (≤5.0)
+   669→                </span>
+   670→              )}
+   671→              {typeof m.ratio === 'number' && finding.pillar === 'accessibility' && (
+   672→                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-rose-700">
+   673→                  CR {m.ratio}:1 / req {String(m.required)}:1
+   674→                </span>
+   675→              )}
+   676→            </div>
+   677→          </div>
+   678→        </div>
+   679→        <ChevronDown
+   680→          className={cn('mt-1 h-4 w-4 shrink-0 text-zinc-400 transition-transform', open && 'rotate-180')}
+   681→        />
+   682→      </button>
+   683→
+   684→      {open && (
+   685→        <div className="space-y-3 border-t border-zinc-100 p-3.5">
+   686→          <p className="text-xs leading-relaxed text-zinc-600">{finding.explanation}</p>
+   687→
+   688→          {finding.box && (
+   689→            <p className="text-[11px] font-mono text-zinc-400">
+   690→              region: x={finding.box.x}% y={finding.box.y}% w={finding.box.w}% h={finding.box.h}%
+   691→            </p>
+   692→          )}
+   693→
+   694→          <CitationCard finding={finding} />
+   695→
+   696→          {finding.suggestion && (
+   697→            <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-3">
+   698→              <p className="text-[10.5px] font-bold uppercase tracking-wider text-teal-700">
+   699→                Suggested fix · {finding.suggestionSource === 'ai' ? 'AI co-pilot' : 'deterministic'}
+   700→              </p>
+   701→              <p className="mt-1 text-xs leading-relaxed text-teal-900">
+   702→                {finding.suggestion}
+   703→              </p>
+   704→            </div>
+   705→          )}
+   706→
+   707→          {Array.isArray(m.alsoViolates) && m.alsoViolates.length > 0 && (
+   708→            <p className="text-[11px] text-zinc-500">
+   709→              Also violates:{' '}
+   710→              {(m.alsoViolates as string[]).map((c, i) => (
+   711→                <span key={c}>
+   712→                  {i > 0 && ', '}
+   713→                  <ClauseBadge clauseId={c} />
+   714→                </span>
+   715→              ))}
+   716→            </p>
+   717→          )}
+   718→
+   719→          {actions}
+   720→        </div>
+   721→      )}
+   722→    </div>
+   723→  )
+   724→}
+   725→
+   726→// ── New draft dialog ─────────────────────────────────────────
+   727→
+   728→function NewDraftButton() {
+   729→  const { refresh, role } = useApp()
+   730→  const [open, setOpen] = useState(false)
+   731→  const [title, setTitle] = useState('')
+   732→  const [channel, setChannel] = useState('LinkedIn')
+   733→  const [kind, setKind] = useState<'text' | 'image'>('text')
+   734→  const [content, setContent] = useState('')
+   735→  const [image, setImage] = useState<{ dataUrl: string; meta: ImageMeta } | null>(null)
+   736→  const [altText, setAltText] = useState('')
+   737→  const [busy, setBusy] = useState(false)
+   738→
+   739→  const onFile = useCallback(async (file: File) => {
+   740→    const bitmap = await createImageBitmap(file)
+   741→    const scale = Math.min(1, 1000 / Math.max(bitmap.width, bitmap.height))
+   742→    const w = Math.round(bitmap.width * scale)
+   743→    const h = Math.round(bitmap.height * scale)
+   744→
+   745→    const canvas = document.createElement('canvas')
+   746→    canvas.width = w
+   747→    canvas.height = h
+   748→    const ctx = canvas.getContext('2d')
+   749→    if (!ctx) return
+   750→    ctx.drawImage(bitmap, 0, 0, w, h)
+   751→    const dataUrl = canvas.toDataURL('image/jpeg', 0.86)
+   752→
+   753→    // palette extraction on a 96px canvas
+   754→    const pc = document.createElement('canvas')
+   755→    const ps = Math.min(96 / w, 96 / h)
+   756→    pc.width = Math.max(1, Math.round(w * ps))
+   757→    pc.height = Math.max(1, Math.round(h * ps))
+   758→    const pctx = pc.getContext('2d')
+   759→    if (!pctx) return
+   760→    pctx.drawImage(bitmap, 0, 0, pc.width, pc.height)
+   761→    const imgData = pctx.getImageData(0, 0, pc.width, pc.height)
+   762→    const palette = extractPaletteFromPixels(
+   763→      new Uint8Array(imgData.data.buffer),
+   764→      pc.width,
+   765→      pc.height
+   766→    )
+   767→
+   768→    setImage({
+   769→      dataUrl,
+   770→      meta: { palette, altText: '', width: bitmap.width, height: bitmap.height, fileName: file.name },
+   771→    })
+   772→  }, [])
+   773→
+   774→  const create = async () => {
+   775→    if (!title.trim()) return
+   776→    if (kind === 'text' && !content.trim()) return
+   777→    if (kind === 'image' && !image) return
+   778→    setBusy(true)
+   779→    try {
+   780→      const res = await fetch('/api/drafts', {
+   781→        method: 'POST',
+   782→        headers: { 'Content-Type': 'application/json' },
+   783→        body: JSON.stringify({
+   784→          title,
+   785→          channel,
+   786→          kind,
+   787→          content: kind === 'text' ? content : '',
+   788→          imageData: image?.dataUrl,
+   789→          imageMeta: image ? { ...image.meta, altText } : undefined,
+   790→          creator: roleIdentity(role).name,
+   791→        }),
+   792→      })
+   793→      const body = await res.json()
+   794→      if (!res.ok) throw new Error(body.error)
+   795→      await refresh()
+   796→      toast({ title: 'Draft created', description: 'Run the 6-pillar audit when ready.' })
+   797→      setOpen(false)
+   798→      setTitle('')
+   799→      setContent('')
+   800→      setImage(null)
+   801→      setAltText('')
+   802→    } catch (err) {
+   803→      toast({ title: 'Create failed', description: String(err), variant: 'destructive' })
+   804→    } finally {
+   805→      setBusy(false)
+   806→    }
+   807→  }
+   808→
+   809→  return (
+   810→    <>
+   811→      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500" onClick={() => setOpen(true)}>
+   812→        <Plus className="mr-1 h-3.5 w-3.5" /> New
+   813→      </Button>
+   814→      <Dialog open={open} onOpenChange={setOpen}>
+   815→        <DialogContent className="max-h-[85vh] overflow-y-auto vl-scroll sm:max-w-xl">
+   816→          <DialogHeader>
+   817→            <DialogTitle>New pre-publication draft</DialogTitle>
+   818→            <DialogDescription>
+   819→              Submit the exact asset that is about to go live.
+   820→            </DialogDescription>
+   821→          </DialogHeader>
+   822→          <div className="space-y-3.5">
+   823→            <div>
+   824→              <Label className="text-xs">Title</Label>
+   825→              <Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Black Friday email blast" />
+   826→            </div>
+   827→            <div className="grid grid-cols-2 gap-3">
+   828→              <div>
+   829→                <Label className="text-xs">Target channel</Label>
+   830→                <Select value={channel} onValueChange={setChannel}>
+   831→                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+   832→                  <SelectContent>
+   833→                    {['LinkedIn', 'Web', 'Press', 'Social', 'Email'].map((c) => (
+   834→                      <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+   835→                    ))}
+   836→                  </SelectContent>
+   837→                </Select>
+   838→              </div>
+   839→              <div>
+   840→                <Label className="text-xs">Format</Label>
+   841→                <Tabs value={kind} onValueChange={(v) => setKind(v as 'text' | 'image')}>
+   842→                  <TabsList className="mt-1 w-full">
+   843→                    <TabsTrigger value="text" className="flex-1 text-xs"><FileText className="mr-1 h-3.5 w-3.5" />Text</TabsTrigger>
+   844→                    <TabsTrigger value="image" className="flex-1 text-xs"><ImageIcon className="mr-1 h-3.5 w-3.5" />Image</TabsTrigger>
+   845→                  </TabsList>
+   846→                </Tabs>
+   847→              </div>
+   848→            </div>
+   849→
+   850→            {kind === 'text' ? (
+   851→              <div>
+   852→                <Label className="text-xs">Copy</Label>
+   853→                <Textarea
+   854→                  className="mt-1 min-h-[140px] font-mono text-[13px]"
+   855→                  value={content}
+   856→                  onChange={(e) => setContent(e.target.value)}
+   857→                  placeholder="Paste the campaign copy…"
+   858→                />
+   859→              </div>
+   860→            ) : (
+   861→              <div className="space-y-3">
+   862→                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 p-6 text-center transition-colors hover:border-emerald-400 hover:bg-emerald-50/40">
+   863→                  <Upload className="h-6 w-6 text-zinc-400" />
+   864→                  <span className="mt-2 text-xs font-semibold text-zinc-600">
+   865→                    {image ? image.meta.fileName : 'Upload PNG / JPG creative'}
+   866→                  </span>
+   867→                  <span className="mt-0.5 text-[10.5px] text-zinc-400">
+   868→                    Palette is extracted locally in your browser
+   869→                  </span>
+   870→                  <input
+   871→                    type="file"
+   872→                    accept="image/png,image/jpeg,image/webp"
+   873→                    className="hidden"
+   874→                    onChange={(e) => {
+   875→                      const f = e.target.files?.[0]
+   876→                      if (f) void onFile(f)
+   877→                    }}
+   878→                  />
+   879→                </label>
+   880→                {!image && (
+   881→                  <button
+   882→                    type="button"
+   883→                    onClick={async () => {
+   884→                      try {
+   885→                        const res = await fetch('/samples/banner-ai.png')
+   886→                        const blob = await res.blob()
+   887→                        await onFile(
+   888→                          new File([blob], 'banner-ai.png', { type: 'image/png' })
+   889→                        )
+   890→                      } catch {
+   891→                        toast({ title: 'Could not load the sample banner', variant: 'destructive' })
+   892→                      }
+   893→                    }}
+   894→                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-600 transition-colors hover:border-emerald-300 hover:text-emerald-700"
+   895→                  >
+   896→                    <ImageIcon className="mr-1.5 inline h-3.5 w-3.5" />
+   897→                    Load an AI-generated sample banner instead
+   898→                  </button>
+   899→                )}
+   900→                {image && (
+   901→                  <div className="space-y-2">
+   902→                    <img src={image.dataUrl} alt="preview" className="max-h-40 rounded-lg border border-zinc-200" />
+   903→                    <div className="flex flex-wrap gap-1.5">
+   904→                      {image.meta.palette.map((s) => (
+   905→                        <span key={s.hex} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-zinc-600">
+   906→                          <HexSwatch hex={s.hex} size={12} /> {s.hex}
+   907→                        </span>
+   908→                      ))}
+   909→                    </div>
+   910→                    <div>
+   911→                      <Label className="text-xs">Alt text (optional)</Label>
+   912→                      <Input className="mt-1 text-xs" value={altText} onChange={(e) => setAltText(e.target.value)} placeholder="Describe the image…" />
+   913→                    </div>
+   914→                  </div>
+   915→                )}
+   916→              </div>
+   917→            )}
+   918→          </div>
+   919→          <DialogFooter>
+   920→            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+   921→            <Button onClick={create} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500">
+   922→              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+   923→              Create draft
+   924→            </Button>
+   925→          </DialogFooter>
+   926→        </DialogContent>
+   927→      </Dialog>
+   928→    </>
+   929→  )
+   930→}
+   931→

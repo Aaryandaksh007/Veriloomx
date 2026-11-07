@@ -1,7 +1,7 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────
-// VeriLoom AI — shared presentational components
+// VeriLoom AI — shared presentational components (warm editorial)
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
@@ -18,10 +18,10 @@ import { cn } from '@/lib/utils'
 
 export function SeverityChip({ severity, className }: { severity: Severity; className?: string }) {
   const styles: Record<Severity, string> = {
-    critical: 'bg-rose-50 text-rose-700 border-rose-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    info: 'bg-sky-50 text-sky-700 border-sky-200',
-    pass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    critical: 'bg-clay-50 text-clay-700 border-clay-200',
+    warning: 'bg-ochre-50 text-ochre-700 border-ochre-200',
+    info: 'bg-stone-100 text-stone-600 border-stone-300',
+    pass: 'bg-olive-50 text-olive-700 border-olive-200',
   }
   return (
     <span
@@ -34,10 +34,10 @@ export function SeverityChip({ severity, className }: { severity: Severity; clas
       <span
         className={cn(
           'h-1.5 w-1.5 rounded-full',
-          severity === 'critical' && 'bg-rose-500',
-          severity === 'warning' && 'bg-amber-500',
-          severity === 'info' && 'bg-sky-500',
-          severity === 'pass' && 'bg-emerald-500'
+          severity === 'critical' && 'bg-clay-500',
+          severity === 'warning' && 'bg-ochre-500',
+          severity === 'info' && 'bg-stone-400',
+          severity === 'pass' && 'bg-olive-500'
         )}
       />
       {severity}
@@ -53,10 +53,10 @@ const ENGINE_ICON: Record<EngineKind, React.ComponentType<{ className?: string }
 }
 
 const ENGINE_STYLE: Record<EngineKind, string> = {
-  deterministic: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  rag: 'bg-teal-50 text-teal-700 border-teal-200',
-  hybrid: 'bg-amber-50 text-amber-700 border-amber-200',
-  vlm: 'bg-zinc-100 text-zinc-700 border-zinc-300',
+  deterministic: 'bg-olive-50 text-olive-700 border-olive-200',
+  rag: 'bg-terra-50 text-terra-700 border-terra-200',
+  hybrid: 'bg-ochre-50 text-ochre-700 border-ochre-200',
+  vlm: 'bg-stone-100 text-stone-600 border-stone-300',
 }
 
 export function EngineChip({ engine }: { engine: EngineKind }) {
@@ -95,7 +95,7 @@ export function ClauseBadge({ clauseId, className }: { clauseId: string; classNa
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md bg-zinc-900 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-zinc-100',
+        'inline-flex items-center rounded-md bg-ink px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-cream',
         className
       )}
     >
@@ -110,24 +110,24 @@ export function CitationCard({ finding, compact = false }: { finding: Finding; c
   return (
     <div
       className={cn(
-        'rounded-lg border border-emerald-200 bg-emerald-50/60',
+        'rounded-lg border border-terra-100 bg-terra-50/70',
         compact ? 'p-2' : 'p-3'
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <ClauseBadge clauseId={finding.clauseId} />
-          <span className="text-xs font-semibold text-emerald-900">
+          <span className="text-xs font-semibold text-terra-900">
             {finding.clauseTitle}
           </span>
         </div>
-        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700">
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-terra-700">
           <ShieldCheck className="h-3.5 w-3.5" />
           VERIFIED AGAINST VAULT
         </span>
       </div>
       {!compact && finding.clauseQuote && (
-        <blockquote className="mt-2 border-l-2 border-emerald-400 pl-2.5 text-xs leading-relaxed text-emerald-900/80">
+        <blockquote className="mt-2 border-l-2 border-terra-300 pl-2.5 text-xs leading-relaxed text-terra-900/80">
           “{finding.clauseQuote}”
         </blockquote>
       )}
@@ -147,11 +147,11 @@ export function ScoreRing({
 }) {
   const r = (size - strokeWidth) / 2
   const c = 2 * Math.PI * r
-  const color = score >= 85 ? '#10b981' : score >= 60 ? '#f59e0b' : '#f43f5e'
+  const color = score >= 85 ? '#6b7a3d' : score >= 60 ? '#c98a42' : '#a53e2a'
   return (
     <div className="relative inline-flex items-center justify-center">
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e4e4e7" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e7e3d8" strokeWidth={strokeWidth} />
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -167,10 +167,10 @@ export function ScoreRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold tabular-nums" style={{ color }}>
+        <span className="font-serif text-3xl font-semibold tabular-nums" style={{ color }}>
           {score}
         </span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">
           / 100
         </span>
       </div>
@@ -181,7 +181,7 @@ export function ScoreRing({
 export function HexSwatch({ hex, size = 18 }: { hex: string; size?: number }) {
   return (
     <span
-      className="inline-block shrink-0 rounded-md border border-zinc-300 shadow-sm"
+      className="inline-block shrink-0 rounded-md border border-line"
       style={{ backgroundColor: hex, width: size, height: size }}
       title={hex}
     />
@@ -223,20 +223,29 @@ export function KpiCard({
   value: string | number
   sub?: string
   icon: React.ComponentType<{ className?: string }>
-  tone?: 'default' | 'emerald' | 'amber' | 'rose'
+  tone?: 'default' | 'accent' | 'olive' | 'ochre' | 'clay' | 'emerald' | 'amber' | 'rose'
   delay?: number
 }) {
-  const tones = {
-    default: 'text-zinc-900',
-    emerald: 'text-emerald-600',
-    amber: 'text-amber-600',
-    rose: 'text-rose-600',
+  const tones: Record<string, string> = {
+    default: 'text-ink',
+    accent: 'text-terra-600',
+    olive: 'text-olive-700',
+    ochre: 'text-ochre-600',
+    clay: 'text-clay-600',
+    // legacy aliases (pre-warm-palette call sites)
+    emerald: 'text-olive-700',
+    amber: 'text-ochre-600',
+    rose: 'text-clay-600',
   }
-  const toneBorder = {
-    default: 'hover:border-zinc-300',
-    emerald: 'hover:border-emerald-300',
-    amber: 'hover:border-amber-300',
-    rose: 'hover:border-rose-300',
+  const toneBorder: Record<string, string> = {
+    default: 'hover:border-stone-300',
+    accent: 'hover:border-terra-200',
+    olive: 'hover:border-olive-200',
+    ochre: 'hover:border-ochre-200',
+    clay: 'hover:border-clay-200',
+    emerald: 'hover:border-olive-200',
+    amber: 'hover:border-ochre-200',
+    rose: 'hover:border-clay-200',
   }
   return (
     <motion.div
@@ -244,29 +253,29 @@ export function KpiCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        'group vl-lift rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm',
+        'group vl-lift rounded-lg border border-line bg-paper p-4',
         toneBorder[tone]
       )}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <p
           title={label}
-          className="truncate text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+          className="line-clamp-2 min-h-[28px] text-[11px] font-semibold uppercase leading-snug tracking-wider text-faint"
         >
           {label}
         </p>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-zinc-900 group-hover:text-white">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-parchment text-ink-soft transition-colors duration-200 group-hover:bg-ink group-hover:text-cream">
           <Icon className="h-3.5 w-3.5" />
         </span>
       </div>
-      <p className={cn('mt-1.5 whitespace-nowrap text-2xl font-bold tabular-nums', tones[tone])}>
+      <p className={cn('mt-1.5 whitespace-nowrap text-2xl font-semibold tabular-nums', tones[tone])}>
         {typeof value === 'number' ? (
           <AnimatedNumber value={value} />
         ) : (
           value
         )}
       </p>
-      {sub && <p className="mt-0.5 text-[11px] text-zinc-400">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-faint">{sub}</p>}
     </motion.div>
   )
 }
@@ -305,37 +314,37 @@ export function ViewHeader({
         <button
           type="button"
           onClick={() => setView('dashboard')}
-          className="group inline-flex items-center gap-1 rounded-md text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+          className="group inline-flex items-center gap-1 rounded-md text-xs font-semibold text-faint transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terra-400/60"
         >
           <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
           Dashboard
         </button>
-        <span className="text-[10px] text-zinc-300" aria-hidden>/</span>
-        <span className="text-xs font-semibold text-zinc-900">{crumb}</span>
+        <span className="text-[10px] text-line" aria-hidden>/</span>
+        <span className="text-xs font-semibold text-ink">{crumb}</span>
 
-        <span className="hidden h-4 w-px bg-zinc-200 sm:block" aria-hidden />
+        <span className="hidden h-4 w-px bg-line sm:block" aria-hidden />
 
         {showDraftChip && draft && (
           <motion.span
-n            initial={{ opacity: 0, scale: 0.94 }}
+            initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.3 }}
-            className="inline-flex max-w-[280px] items-center gap-1.5 truncate rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-medium text-zinc-700 shadow-sm"
+            className="inline-flex max-w-[280px] items-center gap-1.5 truncate rounded-full border border-line bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink-soft"
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-terra-400" />
             <span className="truncate">{draft.title}</span>
-            <span className="shrink-0 text-zinc-400">·</span>
-            <span className="shrink-0 text-zinc-500">{STATUS_META[draft.status].label}</span>
+            <span className="shrink-0 text-faint">·</span>
+            <span className="shrink-0 text-faint">{STATUS_META[draft.status].label}</span>
           </motion.span>
         )}
 
         <div className="ml-auto flex items-center gap-2">{actions}</div>
       </div>
-      <h1 className="mt-2 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+      <h1 className="mt-2 font-serif text-xl font-semibold tracking-tight text-ink sm:text-2xl">
         {title}
       </h1>
       {subtitle && (
-        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-soft">{subtitle}</p>
       )}
     </motion.header>
   )

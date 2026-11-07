@@ -62,10 +62,10 @@ export function CertificateView() {
 
   if (approved.length === 0) {
     return (
-      <div className="flex h-[480px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
-        <Award className="h-12 w-12 text-zinc-300" />
-        <h2 className="mt-4 text-lg font-bold text-zinc-700">No certificates issued yet</h2>
-        <p className="mt-1.5 max-w-md text-sm text-zinc-500">
+      <div className="flex h-[480px] flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-paper/60 text-center">
+        <Award className="h-12 w-12 text-stone-300" />
+        <h2 className="mt-4 text-lg font-serif font-semibold text-stone-700">No certificates issued yet</h2>
+        <p className="mt-1.5 max-w-md text-sm text-ink-soft">
           Complete the full governance loop — audit → remediate → submit → approve — and a
           tamper-evident Brand Governance Approval Certificate is generated automatically.
         </p>
@@ -83,7 +83,7 @@ export function CertificateView() {
         actions={
           <>
             <Select value={selected?.id} onValueChange={(v) => selectDraft(v)}>
-              <SelectTrigger className="h-9 w-56 border-zinc-200 text-xs sm:w-72">
+              <SelectTrigger className="h-9 w-56 border-line text-xs sm:w-72">
                 <SelectValue placeholder="Select approved draft" />
               </SelectTrigger>
               <SelectContent>
@@ -113,7 +113,7 @@ export function CertificateView() {
                 >
                   <Fingerprint className="mr-1.5 h-4 w-4" /> Verify
                 </Button>
-                <Button className="h-9 bg-zinc-900 hover:bg-zinc-800" onClick={() => window.print()}>
+                <Button className="h-9 bg-ink hover:bg-stone-800" onClick={() => window.print()}>
                   <Printer className="mr-1.5 h-4 w-4" /> Print / Save PDF
                 </Button>
               </>
@@ -124,7 +124,7 @@ export function CertificateView() {
 
       {!currentCert && (
         <div className="flex h-96 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-terra-500" />
         </div>
       )}
 
@@ -146,28 +146,28 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="vl-print-area mx-auto max-w-3xl overflow-hidden rounded-2xl border-[3px] border-double border-zinc-800 bg-white shadow-xl"
+      className="vl-print-area mx-auto max-w-3xl overflow-hidden rounded-xl border-[3px] border-double border-stone-800 bg-white shadow-xl"
     >
       {/* header band */}
-      <div className="relative bg-zinc-950 px-8 py-7 text-white">
+      <div className="relative bg-ink px-8 py-7 text-cream">
         <div className="vl-grid-pattern absolute inset-0" />
         <div className="relative flex items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-400">
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-terra-300">
               VeriLoom AI · Living Brand Vault
             </p>
-            <h2 className="mt-1.5 text-2xl font-bold tracking-tight">
+            <h2 className="mt-1.5 text-2xl font-serif font-semibold tracking-tight">
               Brand Governance Approval Certificate
             </h2>
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-stone-400">
               Issued under the Inkloom governance framework · WCAG 2.1 AA · Zero-hallucination pipeline
             </p>
           </div>
           <div className="hidden shrink-0 flex-col items-center sm:flex">
-            <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-emerald-400 bg-emerald-500/10">
-              <BadgeCheck className="h-10 w-10 text-emerald-400" />
+            <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-terra-300 bg-terra-500/10">
+              <BadgeCheck className="h-10 w-10 text-terra-300" />
             </span>
-            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-terra-300">
               Approved
             </span>
           </div>
@@ -194,7 +194,7 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
 
         {/* pillars */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-faint">
             Six-pillar audit outcome
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -203,24 +203,24 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
                 key={p.pillar}
                 className={cn(
                   'flex items-center justify-between rounded-lg border px-3 py-2',
-                  p.status === 'pass' && 'border-emerald-200 bg-emerald-50/60',
-                  p.status === 'warn' && 'border-amber-200 bg-amber-50/60',
-                  p.status === 'fail' && 'border-rose-200 bg-rose-50/60',
-                  p.status === 'skipped' && 'border-zinc-200 bg-zinc-50'
+                  p.status === 'pass' && 'border-olive-200 bg-olive-50/60',
+                  p.status === 'warn' && 'border-ochre-200 bg-ochre-50/60',
+                  p.status === 'fail' && 'border-clay-200 bg-clay-50/60',
+                  p.status === 'skipped' && 'border-stone-200 bg-stone-100'
                 )}
               >
-                <span className="text-[11px] font-bold text-zinc-800">
+                <span className="text-[11px] font-bold text-stone-800">
                   {PILLAR_META[p.pillar].short}
                 </span>
-                <span className="text-[10px] font-semibold uppercase text-zinc-500">
+                <span className="text-[10px] font-semibold uppercase text-ink-soft">
                   {p.status === 'skipped' ? 'n/a' : `${p.critical}C ${p.warning}W ${p.info}I`}
                 </span>
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-            Pre-remediation audit score: <span className="font-bold text-zinc-700">{a.score}/100</span> — all{' '}
-            <span className="font-bold text-zinc-700">{a.findings.length}</span> findings resolved before
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+            Pre-remediation audit score: <span className="font-bold text-stone-700">{a.score}/100</span> — all{' '}
+            <span className="font-bold text-stone-700">{a.findings.length}</span> findings resolved before
             sign-off ({fixedCount} fixed, {cert.overrides.length} justified override
             {cert.overrides.length === 1 ? '' : 's'}) · {a.suppressed} ungrounded AI flags suppressed
             before human review.
@@ -230,22 +230,22 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
         {/* overrides */}
         {cert.overrides.length > 0 && (
           <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-faint">
               <EyeOff className="h-3.5 w-3.5" /> Human overrides preserved (with justification)
             </p>
             <div className="mt-2 space-y-2">
               {cert.overrides.map((o) => (
-                <div key={o.id} className="rounded-lg border border-amber-200 bg-amber-50/50 px-3.5 py-2.5">
+                <div key={o.id} className="rounded-lg border border-ochre-200 bg-ochre-50/50 px-3.5 py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[10.5px] font-bold text-amber-800">{o.findingKey}</span>
+                    <span className="font-mono text-[10.5px] font-bold text-ochre-800">{o.findingKey}</span>
                     {o.finding?.clauseId && (
-                      <span className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+                      <span className="rounded bg-ink px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cream">
                         {o.finding.clauseId}
                       </span>
                     )}
-                    <span className="text-[10.5px] text-zinc-500">— {o.actor}</span>
+                    <span className="text-[10.5px] text-ink-soft">— {o.actor}</span>
                   </div>
-                  <p className="mt-1 text-xs italic leading-relaxed text-zinc-700">“{o.note}”</p>
+                  <p className="mt-1 text-xs italic leading-relaxed text-stone-700">“{o.note}”</p>
                 </div>
               ))}
             </div>
@@ -254,50 +254,50 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
 
         {/* AI disclosure */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-faint">
             AI usage disclosure (transparent ledger)
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {[...new Set(a.aiLedger.map((l) => l.model))].map((m) => (
               <span
                 key={m}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[11px] font-bold text-teal-800"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-terra-200 bg-terra-50 px-2.5 py-1.5 text-[11px] font-bold text-terra-800"
               >
                 <ShieldCheck className="h-3.5 w-3.5" /> {m}
               </span>
             ))}
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-olive-200 bg-olive-50 px-2.5 py-1.5 text-[11px] font-bold text-olive-800">
               <CpuBadge /> Deterministic math: ΔE2000 · WCAG 2.1 luminance
             </span>
           </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-soft">
             {a.aiLedger.length} external AI call{a.aiLedger.length === 1 ? '' : 's'} during audit
             (after local PII/codename redaction). {a.redactedPreview ? 'Confidentiality sandbox was active.' : ''}
           </p>
         </div>
 
         {/* integrity */}
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+        <div className="rounded-xl border border-terra-200 bg-terra-50/60 p-4">
+          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-terra-700">
             <Fingerprint className="h-3.5 w-3.5" /> Tamper-evident integrity hash (SHA-256)
           </p>
-          <p className="mt-1.5 break-all font-mono text-[11px] leading-relaxed text-zinc-700">
+          <p className="mt-1.5 break-all font-mono text-[11px] leading-relaxed text-stone-700">
             {cert.hash}
           </p>
-          <p className="mt-1.5 text-[10.5px] text-zinc-400">
+          <p className="mt-1.5 text-[10.5px] text-faint">
             Computed over the full audit record (findings, citations, overrides, models). Any
             post-approval alteration breaks the hash.
           </p>
         </div>
 
         {/* signatures */}
-        <div className="grid gap-6 border-t border-zinc-200 pt-6 sm:grid-cols-3">
+        <div className="grid gap-6 border-t border-line pt-6 sm:grid-cols-3">
           <Signature name="Maya Chen" role="Creator" />
           <Signature name="Dev Kapoor" role="Brand Manager" />
           <Signature name="Aaryan Sharma" role="Authorised Reviewer" highlight />
         </div>
 
-        <p className="text-center text-[10px] text-zinc-400">
+        <p className="text-center text-[10px] text-faint">
           Generated by VeriLoom AI · Team opopopxxnot · We Code Coders Hackathon —{' '}
           {d.kind === 'image' ? 'Visual asset' : 'Text asset'} ·{' '}
           {d.kind === 'image' ? <ImageIcon className="inline h-3 w-3" /> : <FileText className="inline h-3 w-3" />}
@@ -314,8 +314,8 @@ function CpuBadge() {
 function Field({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-400">{label}</p>
-      <p className={cn('mt-0.5 text-sm font-semibold text-zinc-900', mono && 'font-mono text-[12.5px]')}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-faint">{label}</p>
+      <p className={cn('mt-0.5 text-sm font-semibold text-ink', mono && 'font-mono text-[12.5px]')}>
         {value}
       </p>
     </div>
@@ -328,13 +328,13 @@ function Signature({ name, role, highlight = false }: { name: string; role: stri
       <div
         className={cn(
           'h-10 border-b',
-          highlight ? 'border-emerald-500' : 'border-zinc-300 border-dashed'
+          highlight ? 'border-olive-500' : 'border-stone-300 border-dashed'
         )}
       />
-      <p className={cn('mt-1.5 text-xs font-bold', highlight ? 'text-emerald-700' : 'text-zinc-700')}>
+      <p className={cn('mt-1.5 text-xs font-bold', highlight ? 'text-olive-700' : 'text-stone-700')}>
         {name}
       </p>
-      <p className="text-[10px] text-zinc-400">{role}</p>
+      <p className="text-[10px] text-faint">{role}</p>
     </div>
   )
 }

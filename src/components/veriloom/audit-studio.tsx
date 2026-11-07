@@ -87,7 +87,7 @@ export function AuditStudioView() {
       {/* draft list */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-stone-500">
             Drafts
           </h2>
           <NewDraftButton />
@@ -100,12 +100,12 @@ export function AuditStudioView() {
               className={cn(
                 'w-full rounded-xl border p-3 text-left transition-colors',
                 d.id === selectedDraftId
-                  ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
-                  : 'border-zinc-200 bg-white hover:border-zinc-300'
+                  ? 'border-terra-300 bg-terra-50/60 ring-1 ring-terra-200'
+                  : 'border-stone-200 bg-paper hover:border-stone-300'
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-stone-500">
                   {d.kind === 'image' ? (
                     <ImageIcon className="h-3.5 w-3.5" />
                   ) : (
@@ -115,10 +115,10 @@ export function AuditStudioView() {
                 </span>
                 <StatusChip status={d.status} />
               </div>
-              <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
+              <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-ink">
                 {d.title}
               </p>
-              <p className="mt-0.5 text-[11px] text-zinc-400">by {d.creator}</p>
+              <p className="mt-0.5 text-[11px] text-stone-400">by {d.creator}</p>
             </button>
           ))}
         </div>
@@ -127,12 +127,12 @@ export function AuditStudioView() {
       {/* main panel */}
       <div>
         {!selected ? (
-          <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
-            <ScanSearch className="h-10 w-10 text-zinc-300" />
-            <p className="mt-3 text-sm font-semibold text-zinc-600">
+          <div className="flex h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-paper/60 text-center">
+            <ScanSearch className="h-10 w-10 text-stone-300" />
+            <p className="mt-3 text-sm font-semibold text-stone-600">
               Select a draft to audit
             </p>
-            <p className="mt-1 max-w-sm text-xs text-zinc-400">
+            <p className="mt-1 max-w-sm text-xs text-stone-400">
               Or create a new one — paste campaign copy or upload a promotional image,
               then run the parallel 6-pillar pre-flight audit.
             </p>
@@ -272,16 +272,16 @@ function DraftPanel({
   return (
     <div className="space-y-4">
       {/* header */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-line bg-paper p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <StatusChip status={draft.status} />
-              <span className="text-[11px] font-semibold text-zinc-500">
+              <span className="text-[11px] font-semibold text-stone-500">
                 {draft.channel} · v{draft.version} · {draft.creator}
               </span>
             </div>
-            <h1 className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">
+            <h1 className="mt-1.5 font-serif text-xl font-semibold tracking-tight text-ink">
               {draft.title}
             </h1>
           </div>
@@ -294,7 +294,7 @@ function DraftPanel({
             <Button
               onClick={runAudit}
               disabled={running || draft.status === 'APPROVED'}
-              className="bg-emerald-600 hover:bg-emerald-500"
+              className="bg-terra-600 hover:bg-terra-500"
             >
               {running ? (
                 <>
@@ -312,12 +312,12 @@ function DraftPanel({
 
       {/* content editor */}
       {draft.kind === 'text' ? (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-line bg-paper p-4">
           <div className="mb-2 flex items-center justify-between">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-stone-500">
               Draft copy
             </Label>
-            <span className="text-[11px] text-zinc-400">
+            <span className="text-[11px] text-stone-400">
               {content.trim().split(/\s+/).filter(Boolean).length} words
             </span>
           </div>
@@ -329,20 +329,20 @@ function DraftPanel({
             minHeightClass="min-h-[220px]"
             placeholder="Paste the campaign copy…"
           />
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2.5">
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200 pt-2.5">
             <LiveStatusStrip counts={live.counts} total={live.total} />
-            <span className="shrink-0 text-[10.5px] text-zinc-400">
+            <span className="shrink-0 text-[10.5px] text-stone-400">
               live scan · deterministic · in-browser
             </span>
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-line bg-paper p-4">
           <div className="mb-2 flex items-center justify-between">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-stone-500">
               Promotional asset
             </Label>
-            <span className="text-[11px] text-zinc-400">
+            <span className="text-[11px] text-stone-400">
               {draft.imageMeta?.width}×{draft.imageMeta?.height}px
             </span>
           </div>
@@ -351,19 +351,19 @@ function DraftPanel({
               <img
                 src={draft.imageData}
                 alt={draft.title}
-                className="w-full rounded-lg border border-zinc-200 object-contain"
+                className="w-full rounded-lg border border-stone-200 object-contain"
               />
             )}
             <div className="space-y-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
                   Extracted palette (client-side, pre-upload)
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {(draft.imageMeta?.palette ?? []).map((s) => (
                     <span
                       key={s.hex}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-[11px] font-semibold text-zinc-700"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-stone-200 bg-parchment px-2 py-1 font-mono text-[11px] font-semibold text-stone-700"
                     >
                       <HexSwatch hex={s.hex} size={14} />
                       {s.hex} · {(s.ratio * 100).toFixed(0)}%
@@ -415,9 +415,9 @@ function PillarProgress({ stage, kind }: { stage: number; kind: string }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4"
+      className="rounded-xl border border-terra-200 bg-terra-50/40 p-4"
     >
-      <p className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+      <p className="flex items-center gap-2 text-xs font-semibold text-terra-800">
         <Loader2 className="h-4 w-4 animate-spin" />
         Parallel 6-pillar engine running — deterministic math & citation-gated RAG…
       </p>
@@ -430,18 +430,18 @@ function PillarProgress({ stage, kind }: { stage: number; kind: string }) {
               className={cn(
                 'flex items-center gap-2 rounded-lg border px-2.5 py-2 text-[11px] font-semibold',
                 state === 'running'
-                  ? 'border-emerald-300 bg-white text-emerald-800'
-                  : 'border-zinc-200 bg-white/60 text-zinc-400'
+                  ? 'border-terra-300 bg-paper text-terra-800'
+                  : 'border-stone-200 bg-paper/60 text-stone-400'
               )}
             >
               {state === 'running' ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500" />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-terra-500" />
               ) : (
-                <CircleDot className="h-3.5 w-3.5 shrink-0 text-zinc-300" />
+                <CircleDot className="h-3.5 w-3.5 shrink-0 text-stone-300" />
               )}
               {PILLAR_META[p].short}
               {kind === 'text' && ['visual', 'accessibility'].includes(p) && (
-                <span className="text-[9px] font-normal text-zinc-400">(n/a)</span>
+                <span className="text-[9px] font-normal text-stone-400">(n/a)</span>
               )}
             </div>
           )
@@ -468,10 +468,10 @@ function AuditResultPanel({
 }) {
   const verdict =
     result.score >= 85
-      ? { text: 'Ready to publish', cls: 'text-emerald-600' }
+      ? { text: 'Ready to publish', cls: 'text-olive-600' }
       : result.score >= 60
-        ? { text: 'Minor fixes recommended', cls: 'text-amber-600' }
-        : { text: 'Must not ship as-is', cls: 'text-rose-600' }
+        ? { text: 'Minor fixes recommended', cls: 'text-ochre-600' }
+        : { text: 'Must not ship as-is', cls: 'text-clay-600' }
 
   return (
     <motion.div
@@ -480,21 +480,21 @@ function AuditResultPanel({
       className="space-y-4"
     >
       {/* score + pillars */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="rounded-xl border border-line bg-paper p-5">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-5">
             <ScoreRing score={result.score} />
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                 Compliance verdict
               </p>
               <p className={cn('text-xl font-bold', verdict.cls)}>{verdict.text}</p>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-stone-500">
                 {result.findings.length} findings ·{' '}
                 {result.findings.filter((f) => f.severity === 'critical').length} critical
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10.5px] font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700">
                   <ShieldCheck className="h-3 w-3" />
                   Zero-hallucination guard: {result.suppressed} ungrounded AI flag
                   {result.suppressed === 1 ? '' : 's'} suppressed
@@ -502,7 +502,7 @@ function AuditResultPanel({
                 {result.aiLedger.map((l, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[10.5px] font-semibold text-teal-700"
+                    className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700"
                     title={l.purpose}
                   >
                     <Cpu className="h-3 w-3" /> {l.model}
@@ -512,10 +512,10 @@ function AuditResultPanel({
             </div>
           </div>
           <div className="ml-auto flex flex-col items-end gap-2">
-            <span className="text-[11px] text-zinc-400">
+            <span className="text-[11px] text-stone-400">
               Audit of v{result.version} · {new Date(result.createdAt).toLocaleString()}
             </span>
-            <Button onClick={onGoRemediate} className="bg-zinc-900 hover:bg-zinc-800">
+            <Button onClick={onGoRemediate} className="bg-ink hover:bg-stone-800">
               <WandSparkles className="mr-2 h-4 w-4" />
               Open Remediation Studio
             </Button>
@@ -532,26 +532,26 @@ function AuditResultPanel({
 
       {/* redaction preview */}
       {result.redactedPreview && draft.kind === 'text' && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-line bg-paper p-4">
           <button
             onClick={onToggleRedacted}
             className="flex w-full items-center justify-between text-left"
           >
-            <span className="flex items-center gap-2 text-sm font-bold text-zinc-900">
-              <EyeOff className="h-4 w-4 text-zinc-500" />
+            <span className="flex items-center gap-2 text-sm font-bold text-ink">
+              <EyeOff className="h-4 w-4 text-stone-500" />
               Confidentiality sandbox — what the AI actually received
             </span>
             <ChevronDown
-              className={cn('h-4 w-4 text-zinc-400 transition-transform', showRedacted && 'rotate-180')}
+              className={cn('h-4 w-4 text-stone-400 transition-transform', showRedacted && 'rotate-180')}
             />
           </button>
           {showRedacted && (
-            <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-950 p-3.5 font-mono text-[12px] leading-relaxed text-zinc-300">
+            <div className="mt-3 rounded-lg border border-stone-700 bg-ink p-3.5 font-mono text-[12px] leading-relaxed text-stone-300">
               {result.redactedPreview.split('\n').map((line, i) => (
                 <p key={i} className="min-h-[1.2em] whitespace-pre-wrap">
                   {line.split(/(█+)/).map((part, j) =>
                     part.startsWith('█') ? (
-                      <mark key={j} className="rounded bg-amber-400/30 px-0.5 text-amber-300">
+                      <mark key={j} className="rounded bg-ochre-400/30 px-0.5 text-ochre-300">
                         {part}
                       </mark>
                     ) : (
@@ -567,14 +567,14 @@ function AuditResultPanel({
 
       {/* findings */}
       <div>
-        <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-zinc-500">
+        <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-stone-500">
           Findings ({result.findings.length})
         </h3>
         <div className="space-y-2.5">
           {result.findings.length === 0 && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-6 text-center">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
-              <p className="mt-2 text-sm font-semibold text-emerald-800">
+            <div className="rounded-xl border border-olive-200 bg-olive-50/50 p-6 text-center">
+              <CheckCircle2 className="mx-auto h-8 w-8 text-olive-500" />
+              <p className="mt-2 text-sm font-semibold text-olive-800">
                 Clean across all six pillars.
               </p>
             </div>
@@ -592,34 +592,34 @@ function PillarCard({ summary }: { summary: PillarSummary }) {
   const meta = PILLAR_META[summary.pillar]
   const statusIcon =
     summary.status === 'pass' ? (
-      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+      <CheckCircle2 className="h-4 w-4 text-olive-500" />
     ) : summary.status === 'skipped' ? (
-      <MinusCircle className="h-4 w-4 text-zinc-300" />
+      <MinusCircle className="h-4 w-4 text-stone-300" />
     ) : summary.status === 'warn' ? (
-      <CircleDot className="h-4 w-4 text-amber-500" />
+      <CircleDot className="h-4 w-4 text-ochre-500" />
     ) : (
-      <XCircle className="h-4 w-4 text-rose-500" />
+      <XCircle className="h-4 w-4 text-clay-500" />
     )
   return (
     <div
       className={cn(
         'rounded-lg border p-2.5',
-        summary.status === 'skipped' ? 'border-zinc-100 bg-zinc-50/60 opacity-70' : 'border-zinc-200 bg-white'
+        summary.status === 'skipped' ? 'border-stone-200 bg-parchment/60 opacity-70' : 'border-line bg-paper'
       )}
     >
       <div className="flex items-center justify-between gap-1">
-        <p className="truncate text-[11px] font-bold text-zinc-800">{meta.short}</p>
+        <p className="truncate text-[11px] font-bold text-ink">{meta.short}</p>
         {statusIcon}
       </div>
       <div className="mt-1.5 flex items-center gap-1">
         <EngineChip engine={summary.engine} />
       </div>
-      <p className="mt-1.5 text-[10.5px] leading-snug text-zinc-400">
+      <p className="mt-1.5 text-[10.5px] leading-snug text-stone-400">
         {summary.status === 'skipped'
           ? meta.desc
           : `${summary.critical}C · ${summary.warning}W · ${summary.info}I · ${summary.durationMs}ms`}
       </p>
-      <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-zinc-400/80">
+      <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-stone-400/80">
         {summary.detail}
       </p>
     </div>
@@ -639,37 +639,37 @@ export function FindingCard({
   const m = (finding.meta ?? {}) as Record<string, unknown>
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start justify-between gap-3 p-3.5 text-left hover:bg-zinc-50/60"
+        className="flex w-full items-start justify-between gap-3 p-3.5 text-left hover:bg-parchment/60"
       >
         <div className="flex min-w-0 items-start gap-3">
           <div className="mt-0.5 flex flex-col items-center gap-1">
             <SeverityChip severity={finding.severity} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-snug text-zinc-900">
+            <p className="text-sm font-semibold leading-snug text-ink">
               {finding.title}
             </p>
             {finding.quote && (
-              <p className="mt-1 truncate rounded-md bg-zinc-100 px-2 py-1 font-mono text-[11.5px] text-zinc-600">
+              <p className="mt-1 truncate rounded-md bg-stone-100 px-2 py-1 font-mono text-[11.5px] text-stone-600">
                 “{finding.quote}”
               </p>
             )}
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <EngineChip engine={finding.engine} />
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-stone-400">
                 {PILLAR_META[finding.pillar].short}
               </span>
               <ClauseBadge clauseId={finding.clauseId ?? '—'} />
               {typeof m.deltaE === 'number' && (
-                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-rose-700">
+                <span className="rounded-md bg-clay-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-clay-700">
                   ΔE {m.deltaE} vs {String(m.closest)} (≤5.0)
                 </span>
               )}
               {typeof m.ratio === 'number' && finding.pillar === 'accessibility' && (
-                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-rose-700">
+                <span className="rounded-md bg-clay-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-clay-700">
                   CR {m.ratio}:1 / req {String(m.required)}:1
                 </span>
               )}
@@ -677,16 +677,16 @@ export function FindingCard({
           </div>
         </div>
         <ChevronDown
-          className={cn('mt-1 h-4 w-4 shrink-0 text-zinc-400 transition-transform', open && 'rotate-180')}
+          className={cn('mt-1 h-4 w-4 shrink-0 text-stone-400 transition-transform', open && 'rotate-180')}
         />
       </button>
 
       {open && (
-        <div className="space-y-3 border-t border-zinc-100 p-3.5">
-          <p className="text-xs leading-relaxed text-zinc-600">{finding.explanation}</p>
+        <div className="space-y-3 border-t border-stone-200 p-3.5">
+          <p className="text-xs leading-relaxed text-stone-600">{finding.explanation}</p>
 
           {finding.box && (
-            <p className="text-[11px] font-mono text-zinc-400">
+            <p className="text-[11px] font-mono text-stone-400">
               region: x={finding.box.x}% y={finding.box.y}% w={finding.box.w}% h={finding.box.h}%
             </p>
           )}
@@ -694,18 +694,18 @@ export function FindingCard({
           <CitationCard finding={finding} />
 
           {finding.suggestion && (
-            <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-3">
-              <p className="text-[10.5px] font-bold uppercase tracking-wider text-teal-700">
+            <div className="rounded-lg border border-terra-200 bg-terra-50/50 p-3">
+              <p className="text-[10.5px] font-bold uppercase tracking-wider text-terra-700">
                 Suggested fix · {finding.suggestionSource === 'ai' ? 'AI co-pilot' : 'deterministic'}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-teal-900">
+              <p className="mt-1 text-xs leading-relaxed text-terra-900">
                 {finding.suggestion}
               </p>
             </div>
           )}
 
           {Array.isArray(m.alsoViolates) && m.alsoViolates.length > 0 && (
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-stone-500">
               Also violates:{' '}
               {(m.alsoViolates as string[]).map((c, i) => (
                 <span key={c}>
@@ -808,7 +808,7 @@ function NewDraftButton() {
 
   return (
     <>
-      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500" onClick={() => setOpen(true)}>
+      <Button size="sm" className="bg-terra-600 hover:bg-terra-500" onClick={() => setOpen(true)}>
         <Plus className="mr-1 h-3.5 w-3.5" /> New
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -859,12 +859,12 @@ function NewDraftButton() {
               </div>
             ) : (
               <div className="space-y-3">
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 p-6 text-center transition-colors hover:border-emerald-400 hover:bg-emerald-50/40">
-                  <Upload className="h-6 w-6 text-zinc-400" />
-                  <span className="mt-2 text-xs font-semibold text-zinc-600">
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 bg-parchment p-6 text-center transition-colors hover:border-terra-400 hover:bg-terra-50/40">
+                  <Upload className="h-6 w-6 text-stone-400" />
+                  <span className="mt-2 text-xs font-semibold text-stone-600">
                     {image ? image.meta.fileName : 'Upload PNG / JPG creative'}
                   </span>
-                  <span className="mt-0.5 text-[10.5px] text-zinc-400">
+                  <span className="mt-0.5 text-[10.5px] text-stone-400">
                     Palette is extracted locally in your browser
                   </span>
                   <input
@@ -891,7 +891,7 @@ function NewDraftButton() {
                         toast({ title: 'Could not load the sample banner', variant: 'destructive' })
                       }
                     }}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-600 transition-colors hover:border-emerald-300 hover:text-emerald-700"
+                    className="w-full rounded-lg border border-stone-200 bg-paper px-3 py-2 text-[11px] font-semibold text-stone-600 transition-colors hover:border-terra-300 hover:text-terra-700"
                   >
                     <ImageIcon className="mr-1.5 inline h-3.5 w-3.5" />
                     Load an AI-generated sample banner instead
@@ -899,10 +899,10 @@ function NewDraftButton() {
                 )}
                 {image && (
                   <div className="space-y-2">
-                    <img src={image.dataUrl} alt="preview" className="max-h-40 rounded-lg border border-zinc-200" />
+                    <img src={image.dataUrl} alt="preview" className="max-h-40 rounded-lg border border-stone-200" />
                     <div className="flex flex-wrap gap-1.5">
                       {image.meta.palette.map((s) => (
-                        <span key={s.hex} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-zinc-600">
+                        <span key={s.hex} className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-parchment px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-stone-600">
                           <HexSwatch hex={s.hex} size={12} /> {s.hex}
                         </span>
                       ))}
@@ -918,7 +918,7 @@ function NewDraftButton() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={create} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500">
+            <Button onClick={create} disabled={busy} className="bg-terra-600 hover:bg-terra-500">
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               Create draft
             </Button>

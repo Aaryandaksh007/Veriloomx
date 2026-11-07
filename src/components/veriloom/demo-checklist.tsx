@@ -28,12 +28,12 @@ export function DemoChecklist() {
   if (data === null) {
     return (
       <section className="space-y-3" aria-busy="true" aria-label="Loading demo checklist">
-        <div className="h-5 w-44 animate-pulse rounded-md bg-zinc-100" />
-        <div className="h-3.5 w-full max-w-md animate-pulse rounded-md bg-zinc-100" />
-        <div className="h-2 w-full animate-pulse rounded-full bg-zinc-100" />
+        <div className="h-5 w-44 animate-pulse rounded-md bg-parchment" />
+        <div className="h-3.5 w-full max-w-md animate-pulse rounded-md bg-parchment" />
+        <div className="h-2 w-full animate-pulse rounded-full bg-parchment" />
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-parchment" />
           ))}
         </div>
       </section>
@@ -110,23 +110,23 @@ export function DemoChecklist() {
       {/* ── Header + counter ─────────────────────────────── */}
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-zinc-900">
+          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
             The 60-second demo
           </h2>
-          <p className="mt-0.5 text-sm text-zinc-500">
+          <p className="mt-0.5 text-sm text-ink-soft">
             Follow the golden path judges walk — steps check themselves off as
             you go.
           </p>
         </div>
-        <span className="shrink-0 text-sm font-bold tabular-nums text-zinc-900">
+        <span className="shrink-0 text-sm font-bold tabular-nums text-ink">
           {doneCount}
-          <span className="font-semibold text-zinc-400">/{steps.length}</span>
+          <span className="font-semibold text-faint">/{steps.length}</span>
         </span>
       </div>
 
       {/* ── Progress bar ─────────────────────────────────── */}
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-zinc-100"
+        className="h-2 w-full overflow-hidden rounded-full bg-parchment"
         role="progressbar"
         aria-valuenow={doneCount}
         aria-valuemin={0}
@@ -134,7 +134,7 @@ export function DemoChecklist() {
         aria-label="Demo progress"
       >
         <motion.div
-          className="h-full rounded-full bg-emerald-500"
+          className="h-full rounded-full bg-terra-500"
           initial={false}
           animate={{ width: `${pct}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
@@ -142,7 +142,7 @@ export function DemoChecklist() {
       </div>
 
       {/* ── Step rows ────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-line bg-paper">
         {steps.map((s, i) => (
           <motion.div
             key={s.id}
@@ -152,7 +152,7 @@ export function DemoChecklist() {
             transition={{ duration: 0.25, delay: i * 0.04 }}
             className={cn(
               'flex items-center gap-3 p-3 sm:p-4',
-              i > 0 && 'border-t border-zinc-100',
+              i > 0 && 'border-t border-stone-200',
             )}
           >
             {/* checkbox circle */}
@@ -160,8 +160,8 @@ export function DemoChecklist() {
               className={cn(
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
                 s.done
-                  ? 'bg-emerald-500 text-white'
-                  : 'border-2 border-zinc-300 text-xs font-bold text-zinc-400',
+                  ? 'bg-terra-500 text-cream'
+                  : 'border-2 border-stone-300 text-xs font-bold text-faint',
               )}
             >
               {s.done ? (
@@ -183,12 +183,12 @@ export function DemoChecklist() {
               <p
                 className={cn(
                   'text-sm font-semibold leading-snug',
-                  s.done ? 'text-zinc-400 line-through' : 'text-zinc-900',
+                  s.done ? 'text-faint line-through' : 'text-ink',
                 )}
               >
                 {s.title}
               </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{s.hint}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{s.hint}</p>
             </div>
 
             {/* action */}
@@ -199,8 +199,8 @@ export function DemoChecklist() {
               className={cn(
                 'h-8 shrink-0 px-2.5 text-xs font-semibold',
                 s.done
-                  ? 'text-emerald-600 hover:text-emerald-700'
-                  : 'text-zinc-600 hover:text-zinc-900',
+                  ? 'text-terra-600 hover:text-terra-700'
+                  : 'text-ink-soft hover:text-ink',
               )}
             >
               {s.done ? 'Done' : 'Go'}
@@ -222,12 +222,12 @@ export function DemoChecklist() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 220, damping: 18 }}
-            className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"
+            className="flex items-center gap-3 rounded-xl border border-olive-200 bg-olive-50 p-4"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500">
-              <Trophy className="h-5 w-5 text-white" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-olive-500">
+              <Trophy className="h-5 w-5 text-cream" />
             </span>
-            <p className="text-sm font-semibold leading-relaxed text-emerald-900">
+            <p className="text-sm font-semibold leading-relaxed text-olive-900">
               Demo complete — you just governed a launch end-to-end.
               That&rsquo;s VeriLoom.
             </p>

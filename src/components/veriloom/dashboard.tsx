@@ -212,7 +212,7 @@ function CommandBar({
       label: 'Ungrounded flags suppressed',
       value: suppressed,
       hint: 'zero-hallucination guard',
-      tone: 'text-emerald-600',
+      tone: 'text-olive-700',
     },
   ]
 
@@ -221,28 +221,28 @@ function CommandBar({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm"
+      className="overflow-hidden rounded-xl border border-line bg-paper"
     >
       <div className="p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
+            <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-olive-500" />
               </span>
               Live workspace · auto-sync
             </p>
             <h1
               suppressHydrationWarning
-              className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-[1.7rem]"
+              className="mt-2 font-serif text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]"
             >
               {greeting} — everything starts here.
             </h1>
-            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-soft">
               Pick up any draft below, or try the engine on your own words.
               Every asset passes six brand-governance checks before it ships —{' '}
-              <span className="font-semibold text-zinc-700">
+              <span className="font-semibold text-ink">
                 explained, cited, approved.
               </span>
             </p>
@@ -251,7 +251,7 @@ function CommandBar({
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button
               size="sm"
-              className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+              className="bg-terra-500 text-cream hover:bg-terra-600"
               onClick={onTryLive}
             >
               <Zap className="mr-1.5 h-3.5 w-3.5" />
@@ -260,7 +260,7 @@ function CommandBar({
             <Button
               size="sm"
               variant="outline"
-              className="border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+              className="border-stone-300 bg-paper text-ink-soft hover:bg-parchment hover:text-ink"
               onClick={onDemoAudit}
             >
               <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
@@ -270,7 +270,7 @@ function CommandBar({
         </div>
 
         {/* live stat strip */}
-        <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-zinc-100 pt-5 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-stone-200 pt-5 lg:grid-cols-4">
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
@@ -280,23 +280,23 @@ function CommandBar({
             >
               <p
                 className={cn(
-                  'text-2xl font-bold tabular-nums tracking-tight text-zinc-900',
+                  'text-2xl font-semibold tabular-nums tracking-tight text-ink',
                   s.tone
                 )}
               >
                 <AnimatedNumber value={s.value} />
               </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-zinc-600">{s.label}</p>
-              <p className="text-[10.5px] text-zinc-400">{s.hint}</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-ink-soft">{s.label}</p>
+              <p className="text-[10.5px] text-faint">{s.hint}</p>
             </motion.div>
           ))}
         </div>
       </div>
 
       {/* hairline role bar */}
-      <div className="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-5 py-2.5 sm:px-7">
-        <p className="truncate text-[11px] text-zinc-500">
-          Viewing as <span className="font-semibold text-zinc-700">{roleLabel}</span> — switch the acting role to watch RBAC permissions change live.
+      <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-2.5 sm:px-7">
+        <p className="truncate text-[11px] text-ink-soft">
+          Viewing as <span className="font-semibold text-ink">{roleLabel}</span> — switch the acting role to watch RBAC permissions change live.
         </p>
       </div>
     </motion.section>
@@ -331,7 +331,7 @@ function PipelineBoard() {
           ? [0, 1, 2].map((i) => (
               <div
                 key={`sk-${i}`}
-                className="h-36 animate-pulse rounded-xl border border-zinc-200/60 bg-zinc-100/60"
+                className="h-36 animate-pulse rounded-xl border border-line/60 bg-parchment/60"
               />
             ))
           : drafts.map((d, i) => (
@@ -382,17 +382,17 @@ function PipelineCard({
   const approved = draft.status === 'APPROVED'
   const scoreTone =
     !audit || audit.score >= 85
-      ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+      ? 'text-olive-700 bg-olive-50 border-olive-200'
       : audit.score >= 60
-        ? 'text-amber-600 bg-amber-50 border-amber-200'
-        : 'text-rose-600 bg-rose-50 border-rose-200'
+        ? 'text-ochre-700 bg-ochre-50 border-ochre-200'
+        : 'text-clay-700 bg-clay-50 border-clay-200'
 
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.06 * index, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="group cursor-pointer rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+      className="group cursor-pointer rounded-xl border border-line bg-paper p-4 transition-all duration-200 hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terra-400/60"
       onClick={open}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -407,7 +407,7 @@ function PipelineCard({
       {/* header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-zinc-900 group-hover:text-white">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-parchment text-ink-soft transition-colors duration-200 group-hover:bg-ink group-hover:text-cream">
             {draft.kind === 'image' ? (
               <ImageIcon className="h-4 w-4" />
             ) : (
@@ -415,10 +415,10 @@ function PipelineCard({
             )}
           </span>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-bold leading-snug text-zinc-900">
+            <h3 className="truncate text-sm font-bold leading-snug text-ink">
               {draft.title}
             </h3>
-            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+            <p className="mt-0.5 truncate text-[11px] text-ink-soft">
               {draft.creator} · {draft.channel} · {draft.kind} · v{draft.version} ·{' '}
               {timeAgo(draft.updatedAt)}
             </p>
@@ -427,7 +427,7 @@ function PipelineCard({
         <div className="flex shrink-0 items-center gap-1.5">
           {audit && approved ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-600"
+              className="inline-flex items-center gap-1 rounded-md border border-olive-200 bg-olive-50 px-1.5 py-0.5 text-[11px] font-bold text-olive-700"
               title="Governed publication — tamper-evident certificate issued"
             >
               <BadgeCheck className="h-3 w-3" />
@@ -452,9 +452,9 @@ function PipelineCard({
       <div className="mt-4 px-1">
         <div className="relative flex items-start justify-between">
           {/* track */}
-          <span className="absolute left-6 right-6 top-[9px] h-[3px] rounded-full bg-zinc-200/80" />
+          <span className="absolute left-6 right-6 top-[9px] h-[3px] rounded-full bg-line/80" />
           <motion.span
-            className="absolute left-6 right-6 top-[9px] h-[3px] origin-left rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+            className="absolute left-6 right-6 top-[9px] h-[3px] origin-left rounded-full bg-terra-500"
             initial={{ scaleX: 0 }}
             animate={{ scaleX: fillPct / 100 }}
             transition={{ delay: 0.25 + 0.06 * index, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
@@ -467,16 +467,16 @@ function PipelineCard({
                   className={cn(
                     'relative flex h-5 w-5 items-center justify-center rounded-full border-2 text-[9px] font-bold transition-all duration-300',
                     s.done
-                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      ? 'border-terra-500 bg-terra-500 text-cream'
                       : isActive
-                        ? 'border-emerald-400 bg-white text-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]'
-                        : 'border-zinc-300 bg-zinc-50 text-zinc-400'
+                        ? 'border-terra-400 bg-paper text-terra-600 shadow-[0_0_0_4px_rgba(201,100,66,0.18)]'
+                        : 'border-stone-300 bg-parchment text-faint'
                   )}
                 >
                   {isActive && (
                   <span
                     aria-hidden
-                    className="absolute inset-0 animate-ping rounded-full bg-emerald-400/40"
+                    className="absolute inset-0 animate-ping rounded-full bg-terra-400/40"
                   />
                 )}
                 {s.done ? <Check className="h-3 w-3" strokeWidth={3.5} /> : i + 1}
@@ -485,10 +485,10 @@ function PipelineCard({
                   className={cn(
                     'mt-1.5 text-[10px] leading-tight',
                     s.done
-                      ? 'font-semibold text-zinc-700'
+                      ? 'font-semibold text-ink-soft'
                       : isActive
-                        ? 'font-bold text-emerald-600'
-                        : 'text-zinc-400'
+                        ? 'font-bold text-terra-700'
+                        : 'text-faint'
                   )}
                 >
                   {s.label}
@@ -500,22 +500,22 @@ function PipelineCard({
       </div>
 
       {/* footer row */}
-      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
-        <p className="min-w-0 truncate text-xs text-zinc-500">
+      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-stone-200 pt-3">
+        <p className="min-w-0 truncate text-xs text-ink-soft">
           {allDone ? (
             <>
-              <span className="font-semibold text-emerald-600">Done:</span>{' '}
+              <span className="font-semibold text-olive-700">Done:</span>{' '}
               approved & certified — view the tamper-evident certificate
             </>
           ) : (
             <>
-              <span className="font-semibold text-zinc-700">Next:</span>{' '}
+              <span className="font-semibold text-ink">Next:</span>{' '}
               {NEXT_HINT[nextStage!.id]}{' '}
-              <span className="text-zinc-400">· {VIEW_LABEL[route]}</span>
+              <span className="text-faint">· {VIEW_LABEL[route]}</span>
             </>
           )}
         </p>
-        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-emerald-600 transition-all duration-200 group-hover:gap-2 group-hover:text-emerald-500">
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-terra-600 transition-all duration-200 group-hover:gap-2 group-hover:text-terra-500">
           Open <ArrowRight className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -607,7 +607,7 @@ function WorkflowRail() {
           <button
             type="button"
             onClick={() => setPlaying((p) => !p)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:text-zinc-900"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink-soft transition-colors hover:border-stone-300 hover:text-ink"
             aria-label={playing ? 'Pause auto-advance' : 'Resume auto-advance'}
           >
             {playing ? (
@@ -620,12 +620,12 @@ function WorkflowRail() {
         }
       />
 
-      <div className="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-6">
+      <div className="rounded-xl border border-line bg-paper p-5 sm:p-6">
         {/* the rail */}
         <div className="relative flex items-start justify-between sm:px-1">
-          <span className="absolute left-7 right-7 top-[13px] h-[3px] rounded-full bg-zinc-200/80 sm:left-10 sm:right-10" />
+          <span className="absolute left-7 right-7 top-[13px] h-[3px] rounded-full bg-line/80 sm:left-10 sm:right-10" />
           <motion.span
-            className="absolute left-7 right-7 top-[13px] h-[3px] origin-left rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 sm:left-10 sm:right-10"
+            className="absolute left-7 right-7 top-[13px] h-[3px] origin-left rounded-full bg-terra-500 sm:left-10 sm:right-10"
             initial={false}
             animate={{ scaleX: fillPct / 100 }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
@@ -651,10 +651,10 @@ function WorkflowRail() {
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold transition-colors duration-300',
                     isPast
-                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      ? 'border-terra-500 bg-terra-500 text-cream'
                       : isActive
-                        ? 'border-emerald-400 bg-white text-emerald-600 shadow-[0_0_0_5px_rgba(16,185,129,0.2)]'
-                        : 'border-zinc-300 bg-zinc-50 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600'
+                        ? 'border-terra-400 bg-paper text-terra-600 shadow-[0_0_0_5px_rgba(201,100,66,0.2)]'
+                        : 'border-stone-300 bg-parchment text-faint hover:border-stone-400 hover:text-ink-soft'
                   )}
                 >
                   {isPast ? <Check className="h-3.5 w-3.5" strokeWidth={3.5} /> : s.n}
@@ -663,10 +663,10 @@ function WorkflowRail() {
                   className={cn(
                     'mt-2 hidden text-center text-[10.5px] leading-tight sm:block',
                     isActive
-                      ? 'font-bold text-emerald-600'
+                      ? 'font-bold text-terra-700'
                       : isPast
-                        ? 'font-semibold text-zinc-600'
-                        : 'text-zinc-400'
+                        ? 'font-semibold text-ink-soft'
+                        : 'text-faint'
                   )}
                 >
                   {s.title.split(' ').slice(0, 2).join(' ')}
@@ -684,24 +684,24 @@ function WorkflowRail() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -16 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-6 rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 sm:p-5"
+            className="mt-6 rounded-xl border border-stone-200 bg-parchment/70 p-4 sm:p-5"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-faint">
                   Stage {current.n} of {STEPS.length} · {current.actor}
                 </p>
-                <h3 className="mt-1 text-base font-bold tracking-tight text-zinc-900">
+                <h3 className="mt-1 text-base font-bold tracking-tight text-ink">
                   {current.title}
                 </h3>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
                   {current.desc}
                 </p>
               </div>
               <Button
                 size="sm"
                 variant="outline"
-                className="shrink-0 border-zinc-300 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                className="shrink-0 border-stone-300 bg-paper text-ink-soft hover:border-terra-300 hover:bg-terra-50 hover:text-terra-700"
                 onClick={() => setView(current.view)}
               >
                 Open {VIEW_LABEL[current.view]}
@@ -738,12 +738,12 @@ function SectionHead({
       className="mb-3.5 flex flex-wrap items-end justify-between gap-3"
     >
       <div className="min-w-0">
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
           {kicker}
         </p>
-        <h2 className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900">{title}</h2>
+        <h2 className="mt-0.5 font-serif text-lg font-semibold tracking-tight text-ink">{title}</h2>
         {desc && (
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-500">{desc}</p>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-soft">{desc}</p>
         )}
       </div>
       {right}
@@ -763,14 +763,14 @@ function EngineCard({
   engines: ('deterministic' | 'rag' | 'hybrid' | 'vlm')[]
 }) {
   return (
-    <div className="group vl-lift rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-zinc-300">
+    <div className="group vl-lift rounded-xl border border-line bg-paper p-4 transition-colors duration-200 hover:border-stone-300">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 transition-colors duration-200 group-hover:bg-emerald-50 group-hover:text-emerald-600">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-parchment text-ink-soft transition-colors duration-200 group-hover:bg-terra-50 group-hover:text-terra-600">
           <Icon className="h-4 w-4" />
         </span>
-        <h3 className="text-sm font-bold text-zinc-900">{title}</h3>
+        <h3 className="text-sm font-bold text-ink">{title}</h3>
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{body}</p>
+      <p className="mt-2 text-xs leading-relaxed text-ink-soft">{body}</p>
       {engines.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {engines.map((e) => (
@@ -787,16 +787,16 @@ function ActivityTimeline() {
   const events = useMemo(() => (data?.events ?? []).slice(0, 14), [data])
 
   return (
-    <div className="max-h-[430px] overflow-y-auto rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm vl-scroll">
+    <div className="max-h-[430px] overflow-y-auto rounded-xl border border-line bg-paper p-4 vl-scroll">
       {events.length === 0 ? (
-        <p className="p-6 text-center text-xs text-zinc-400">
+        <p className="p-6 text-center text-xs text-faint">
           No activity yet — run your first audit.
         </p>
       ) : (
         <ol className="relative space-y-1">
           <span
             aria-hidden
-            className="absolute bottom-2 left-[6.5px] top-2 w-px bg-zinc-200"
+            className="absolute bottom-2 left-[6.5px] top-2 w-px bg-line"
           />
           {events.map((e, i) => (
             <motion.li
@@ -805,23 +805,23 @@ function ActivityTimeline() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ delay: Math.min(i * 0.04, 0.3), duration: 0.35 }}
-              className="relative rounded-lg px-2 py-1.5 pl-6 transition-colors hover:bg-zinc-50"
+              className="relative rounded-lg px-2 py-1.5 pl-6 transition-colors hover:bg-parchment"
             >
               <span
                 className={cn(
-                  'absolute left-0 top-[13px] h-3 w-3 rounded-full border-2 border-white',
-                  e.action === 'AI_CALL' && 'bg-teal-400',
-                  e.action === 'AUDIT_RUN' && 'bg-emerald-500',
-                  e.action === 'OVERRIDE' && 'bg-amber-500',
-                  e.action === 'STATUS_CHANGE' && 'bg-zinc-400',
-                  e.action === 'CERT_ISSUED' && 'bg-emerald-600',
-                  e.action.startsWith('VAULT') && 'bg-zinc-700'
+                  'absolute left-0 top-[13px] h-3 w-3 rounded-full border-2 border-paper',
+                  e.action === 'AI_CALL' && 'bg-terra-400',
+                  e.action === 'AUDIT_RUN' && 'bg-terra-500',
+                  e.action === 'OVERRIDE' && 'bg-ochre-500',
+                  e.action === 'STATUS_CHANGE' && 'bg-stone-400',
+                  e.action === 'CERT_ISSUED' && 'bg-olive-600',
+                  e.action.startsWith('VAULT') && 'bg-stone-700'
                 )}
               />
-              <p className="truncate text-xs font-medium text-zinc-800">
+              <p className="truncate text-xs font-medium text-ink">
                 {describeEvent(e.action, e.details)}
               </p>
-              <p className="text-[10.5px] text-zinc-400">
+              <p className="text-[10.5px] text-faint">
                 {e.actor} · {timeAgo(e.createdAt)}
               </p>
             </motion.li>

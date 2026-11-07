@@ -94,7 +94,7 @@ export function LiveTextarea({
         placeholder={placeholder}
         spellCheck={false}
         className={cn(
-          'relative resize-none border-input bg-transparent shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+          'relative resize-none border-input bg-transparent outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
           METRICS,
           minHeightClass
         )}
@@ -116,8 +116,8 @@ export function LiveStatusStrip({
   return (
     <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
       {total === 0 ? (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-olive-700">
+          <span className="h-2 w-2 rounded-full bg-olive-500" />
           No instant violations — tone &amp; semantic checks run in the full audit
         </span>
       ) : (

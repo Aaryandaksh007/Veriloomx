@@ -122,7 +122,7 @@ export function ReviewView() {
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
       {/* draft list */}
       <div className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Drafts</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-soft">Drafts</h2>
         <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
           {drafts.map((d) => (
             <button
@@ -131,18 +131,18 @@ export function ReviewView() {
               className={cn(
                 'w-full rounded-xl border p-3 text-left transition-colors',
                 d.id === selected?.id
-                  ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
-                  : 'border-zinc-200 bg-white hover:border-zinc-300'
+                  ? 'border-terra-300 bg-terra-50/60 ring-1 ring-terra-200'
+                  : 'border-line bg-paper hover:border-stone-300'
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500">
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-ink-soft">
                   {d.kind === 'image' ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                   v{d.version}
                 </span>
                 <StatusChip status={d.status} />
               </div>
-              <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-900">
+              <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-ink">
                 {d.title}
               </p>
             </button>
@@ -153,18 +153,18 @@ export function ReviewView() {
       {/* main */}
       <div>
         {!draft ? (
-          <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
-            <ClipboardCheck className="h-10 w-10 text-zinc-300" />
-            <p className="mt-3 text-sm font-semibold text-zinc-600">Select a draft to review</p>
+          <div className="flex h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-paper/60 text-center">
+            <ClipboardCheck className="h-10 w-10 text-stone-300" />
+            <p className="mt-3 text-sm font-semibold text-stone-600">Select a draft to review</p>
           </div>
         ) : (
           <div className="space-y-4">
             {/* status flow */}
-            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="rounded-xl border border-line bg-paper p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-lg font-bold tracking-tight text-zinc-900">{draft.title}</h1>
-                  <p className="mt-0.5 text-xs text-zinc-500">
+                  <h1 className="text-lg font-serif font-semibold tracking-tight text-ink">{draft.title}</h1>
+                  <p className="mt-0.5 text-xs text-ink-soft">
                     {draft.channel} · v{draft.version} · created by {draft.creator}
                   </p>
                 </div>
@@ -180,14 +180,14 @@ export function ReviewView() {
                   const isLoop = draft.status === 'CHANGES_REQUESTED' && s.id === 'IN_REVIEW'
                   return (
                     <div key={s.id} className="flex shrink-0 items-center">
-                      {i > 0 && <span className={cn('h-px w-5', done ? 'bg-emerald-400' : 'bg-zinc-200')} />}
+                      {i > 0 && <span className={cn('h-px w-5', done ? 'bg-olive-400' : 'bg-stone-200')} />}
                       <span
                         className={cn(
                           'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold',
                           done && !isLoop
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-zinc-200 bg-zinc-50 text-zinc-400',
-                          isLoop && 'border-amber-300 bg-amber-50 text-amber-700'
+                            ? 'border-olive-200 bg-olive-50 text-olive-700'
+                            : 'border-stone-200 bg-parchment text-faint',
+                          isLoop && 'border-ochre-300 bg-ochre-50 text-ochre-700'
                         )}
                       >
                         {done && !isLoop && <BadgeCheck className="h-3 w-3" />}
@@ -199,7 +199,7 @@ export function ReviewView() {
                 })}
               </div>
               {draft.status === 'CHANGES_REQUESTED' && (
-                <p className="mt-2 text-[11px] font-medium text-amber-700">
+                <p className="mt-2 text-[11px] font-medium text-ochre-700">
                   The manager sent this back — edit the content (Audit Studio), re-audit, remediate
                   and resubmit.
                 </p>
@@ -208,8 +208,8 @@ export function ReviewView() {
 
             {/* version diff */}
             {detail && detail.versions.length > 1 && draft.kind === 'text' && (
-              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              <div className="rounded-xl border border-line bg-paper p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
                   <History className="h-3.5 w-3.5" />
                   Version diff · v1 → v{draft.version}
                 </p>
@@ -221,23 +221,23 @@ export function ReviewView() {
             )}
 
             {/* content */}
-            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="rounded-xl border border-line bg-paper p-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
                 Current content
               </p>
               {draft.kind === 'text' ? (
-                <div className="whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[13px] leading-relaxed text-zinc-800">
+                <div className="whitespace-pre-wrap rounded-lg bg-parchment p-3 text-[13px] leading-relaxed text-stone-800">
                   {draft.content}
                 </div>
               ) : (
                 <div>
                   {draft.imageData && (
-                    <img src={draft.imageData} alt={draft.title} className="max-w-sm rounded-lg border border-zinc-200" />
+                    <img src={draft.imageData} alt={draft.title} className="max-w-sm rounded-lg border border-line" />
                   )}
-                  <p className="mt-2 text-xs text-zinc-500">
+                  <p className="mt-2 text-xs text-ink-soft">
                     <span className="font-semibold">Alt text:</span>{' '}
                     {draft.imageMeta?.altText || (
-                      <span className="text-rose-600">missing</span>
+                      <span className="text-clay-600">missing</span>
                     )}
                   </p>
                 </div>
@@ -245,8 +245,8 @@ export function ReviewView() {
             </div>
 
             {/* RBAC actions */}
-            <div className="rounded-xl border border-zinc-200 bg-zinc-950 p-4 text-white shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="rounded-xl border border-line bg-ink p-4 text-cream">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                 Sign-off console — you are {identity.name} ({ROLE_META[role].label})
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -286,29 +286,29 @@ export function ReviewView() {
       {/* comments */}
       {draft && (
         <div className="flex max-h-[calc(100vh-190px)] flex-col">
-          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-zinc-500">
+          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-ink-soft">
             <MessageSquare className="h-4 w-4" /> Thread
           </h2>
           <div className="flex-1 space-y-2 overflow-y-auto pr-1 vl-scroll">
             {(detail?.comments ?? []).map((c) => (
-              <div key={c.id} className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+              <div key={c.id} className="rounded-xl border border-line bg-paper p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11.5px] font-bold text-zinc-800">{c.author}</p>
-                  <span className="text-[10px] text-zinc-400">{timeAgo(c.createdAt)}</span>
+                  <p className="text-[11.5px] font-bold text-stone-800">{c.author}</p>
+                  <span className="text-[10px] text-faint">{timeAgo(c.createdAt)}</span>
                 </div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-faint">
                   {ROLE_META[c.role as keyof typeof ROLE_META]?.label ?? c.role}
                 </p>
-                <p className="mt-1.5 text-xs leading-relaxed text-zinc-600">{c.body}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{c.body}</p>
               </div>
             ))}
             {(detail?.comments.length ?? 0) === 0 && (
-              <p className="rounded-xl border border-dashed border-zinc-200 p-6 text-center text-xs text-zinc-400">
+              <p className="rounded-xl border border-dashed border-stone-200 p-6 text-center text-xs text-faint">
                 No comments yet.
               </p>
             )}
           </div>
-          <div className="mt-2 rounded-xl border border-zinc-200 bg-white p-2.5 shadow-sm">
+          <div className="mt-2 rounded-xl border border-line bg-paper p-2.5">
             <Textarea
               className="min-h-[60px] text-xs"
               placeholder={`Comment as ${identity.name}…`}
@@ -317,7 +317,7 @@ export function ReviewView() {
             />
             <Button
               size="sm"
-              className="mt-2 w-full bg-zinc-900 hover:bg-zinc-800"
+              className="mt-2 w-full bg-ink hover:bg-stone-800"
               disabled={!comment.trim() || busy}
               onClick={async () => {
                 if (!selected) return
@@ -364,7 +364,7 @@ export function ReviewView() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setChangesOpen(false)}>Cancel</Button>
             <Button
-              className="bg-amber-600 hover:bg-amber-500"
+              className="bg-ochre-600 hover:bg-ochre-500"
               disabled={changesNote.trim().length < 10 || busy}
               onClick={async () => {
                 await act('request-changes', changesNote.trim())
@@ -410,18 +410,18 @@ function RbacButton({
         disabled && 'cursor-not-allowed opacity-45',
         !disabled &&
           variant === 'emerald' &&
-          'border-emerald-400/40 bg-emerald-500/10 hover:border-emerald-400 hover:bg-emerald-500/20',
-        !disabled && variant === 'amber' && 'border-amber-400/40 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/20'
+          'border-olive-400/40 bg-olive-500/10 hover:border-olive-400 hover:bg-olive-500/20',
+        !disabled && variant === 'amber' && 'border-ochre-400/40 bg-ochre-500/10 hover:border-ochre-400 hover:bg-ochre-500/20'
       )}
     >
       <span>
-        <span className="flex items-center gap-1.5 text-[13px] font-bold text-white">
-          {!allowed && <Lock className="h-3.5 w-3.5 text-zinc-500" />}
+        <span className="flex items-center gap-1.5 text-[13px] font-bold text-cream">
+          {!allowed && <Lock className="h-3.5 w-3.5 text-stone-500" />}
           {label}
         </span>
-        <span className="mt-0.5 block text-[10.5px] leading-snug text-zinc-400">{desc}</span>
+        <span className="mt-0.5 block text-[10.5px] leading-snug text-stone-400">{desc}</span>
       </span>
-      {busy && disabled ? <Loader2 className="h-4 w-4 animate-spin text-zinc-400" /> : null}
+      {busy && disabled ? <Loader2 className="h-4 w-4 animate-spin text-stone-400" /> : null}
     </button>
   )
 }
@@ -429,7 +429,7 @@ function RbacButton({
 function DiffView({ a, b }: { a: string; b: string }) {
   const tokens = useMemo(() => wordDiff(a, b), [a, b])
   return (
-    <div className="rounded-lg bg-zinc-50 p-3 text-[13px] leading-[1.9] text-zinc-800">
+    <div className="rounded-lg bg-parchment p-3 text-[13px] leading-[1.9] text-stone-800">
       {tokens.map((t, i) =>
         t.op === 'same' ? (
           <span key={i}>{t.text}</span>
@@ -438,7 +438,7 @@ function DiffView({ a, b }: { a: string; b: string }) {
             key={i}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded bg-rose-100 px-0.5 text-rose-700 line-through decoration-rose-400"
+            className="rounded bg-clay-100 px-0.5 text-clay-700 line-through decoration-clay-400"
           >
             {t.text}
           </motion.span>
@@ -447,7 +447,7 @@ function DiffView({ a, b }: { a: string; b: string }) {
             key={i}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded bg-emerald-100 px-0.5 font-semibold text-emerald-800"
+            className="rounded bg-olive-100 px-0.5 font-semibold text-olive-800"
           >
             {t.text}
           </motion.span>

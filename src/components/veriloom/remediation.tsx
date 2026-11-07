@@ -96,7 +96,7 @@ export function RemediationView() {
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
       {/* draft list */}
       <div className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Drafts</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-stone-500">Drafts</h2>
         <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
           {drafts.map((d) => {
             const a = data?.audits[d.id]
@@ -108,22 +108,22 @@ export function RemediationView() {
                 className={cn(
                   'w-full rounded-xl border p-3 text-left transition-colors',
                   d.id === selected?.id
-                    ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300'
+                    ? 'border-terra-300 bg-terra-50/60 ring-1 ring-terra-200'
+                    : 'border-stone-200 bg-paper hover:border-stone-300'
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500">
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-stone-500">
                     {d.kind === 'image' ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                     v{d.version}
                   </span>
                   <StatusChip status={d.status} />
                 </div>
-                <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-900">
+                <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-ink">
                   {d.title}
                 </p>
                 {a && total > 0 && (
-                  <p className="mt-0.5 text-[11px] text-zinc-400">{total} findings · score {a.score}</p>
+                  <p className="mt-0.5 text-[11px] text-stone-400">{total} findings · score {a.score}</p>
                 )}
               </button>
             )
@@ -134,35 +134,35 @@ export function RemediationView() {
       {/* document view */}
       <div>
         {!selected || !audit ? (
-          <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/60 text-center">
-            <WandSparkles className="h-10 w-10 text-zinc-300" />
-            <p className="mt-3 text-sm font-semibold text-zinc-600">Nothing to remediate yet</p>
-            <p className="mt-1 max-w-sm text-xs text-zinc-400">
+          <div className="flex h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-paper/60 text-center">
+            <WandSparkles className="h-10 w-10 text-stone-300" />
+            <p className="mt-3 text-sm font-semibold text-stone-600">Nothing to remediate yet</p>
+            <p className="mt-1 max-w-sm text-xs text-stone-400">
               Select a draft that has been audited. Run an audit first from the Audit Studio.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {/* progress header */}
-            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="rounded-xl border border-line bg-paper p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-lg font-bold tracking-tight text-zinc-900">
+                  <h1 className="font-serif text-lg font-semibold tracking-tight text-ink">
                     {selected.title}
                   </h1>
-                  <p className="mt-0.5 text-xs text-zinc-500">
+                  <p className="mt-0.5 text-xs text-stone-500">
                     Audit v{audit.version} · score {audit.score}/100 · {audit.suppressed} ungrounded
                     AI flags never reached you
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                       Resolved
                     </p>
-                    <p className="text-lg font-bold tabular-nums text-zinc-900">
+                    <p className="text-lg font-bold tabular-nums text-ink">
                       {resolved}
-                      <span className="text-zinc-400">/{findings.length}</span>
+                      <span className="text-stone-400">/{findings.length}</span>
                     </p>
                   </div>
                   <RemediateButton
@@ -174,9 +174,9 @@ export function RemediationView() {
                   />
                 </div>
               </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
                 <motion.div
-                  className="h-full rounded-full bg-emerald-500"
+                  className="h-full rounded-full bg-terra-500"
                   animate={{ width: `${findings.length ? (resolved / findings.length) * 100 : 0}%` }}
                   transition={{ type: 'spring', stiffness: 120, damping: 20 }}
                 />
@@ -185,8 +185,8 @@ export function RemediationView() {
 
             {/* document */}
             {selected.kind === 'text' ? (
-              <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              <div className="rounded-xl border border-line bg-paper p-5">
+                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                   <Layers className="h-3.5 w-3.5" /> Document · flags highlighted
                 </p>
                 <HighlightedText
@@ -198,13 +198,13 @@ export function RemediationView() {
                 />
               </div>
             ) : (
-              <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              <div className="rounded-xl border border-line bg-paper p-5">
+                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                   <Layers className="h-3.5 w-3.5" /> Asset · flagged regions boxed
                 </p>
                 {selected.imageData && (
                   <div className="relative inline-block">
-                    <img src={selected.imageData} alt={selected.title} className="max-w-full rounded-lg border border-zinc-200" />
+                    <img src={selected.imageData} alt={selected.title} className="max-w-full rounded-lg border border-stone-200" />
                     {findings
                       .filter((f) => f.box)
                       .map((f) => {
@@ -221,9 +221,9 @@ export function RemediationView() {
                             className={cn(
                               'absolute rounded-md border-2 transition-all',
                               activeKey === f.key
-                                ? 'border-rose-500 ring-2 ring-rose-300'
-                                : 'border-rose-400/80 hover:border-rose-500',
-                              done && 'border-emerald-400 opacity-60'
+                                ? 'border-clay-500 ring-2 ring-clay-300'
+                                : 'border-clay-400/80 hover:border-clay-500',
+                              done && 'border-olive-400 opacity-60'
                             )}
                             style={{
                               left: `${x}%`,
@@ -233,7 +233,7 @@ export function RemediationView() {
                             }}
                             title={f.title}
                           >
-                            <span className="absolute -top-2 -left-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+                            <span className="absolute -top-2 -left-2 flex h-5 w-5 items-center justify-center rounded-full bg-clay-500 text-[10px] font-bold text-cream">
                               {done ? '✓' : '!'}
                             </span>
                           </button>
@@ -241,7 +241,7 @@ export function RemediationView() {
                       })}
                   </div>
                 )}
-                <p className="mt-3 text-[11px] text-zinc-400">
+                <p className="mt-3 text-[11px] text-stone-400">
                   Bounding boxes come from VLM region sampling; the pass/fail verdict is
                   computed with exact WCAG 2.1 luminance math.
                 </p>
@@ -254,7 +254,7 @@ export function RemediationView() {
       {/* findings queue */}
       {selected && audit && (
         <div className="max-h-[calc(100vh-190px)] space-y-2.5 overflow-y-auto pr-1 vl-scroll">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-stone-500">
             Findings queue
           </h2>
           {findings.map((f) => (
@@ -269,9 +269,9 @@ export function RemediationView() {
             />
           ))}
           {findings.length === 0 && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 text-center">
-              <BadgeCheck className="mx-auto h-7 w-7 text-emerald-500" />
-              <p className="mt-2 text-xs font-semibold text-emerald-800">
+            <div className="rounded-xl border border-olive-200 bg-olive-50/60 p-5 text-center">
+              <BadgeCheck className="mx-auto h-7 w-7 text-olive-500" />
+              <p className="mt-2 text-xs font-semibold text-olive-800">
                 Zero findings — this draft was clean.
               </p>
             </div>
@@ -324,7 +324,7 @@ function HighlightedText({
   }, [text, findings])
 
   return (
-    <div className="whitespace-pre-wrap text-[13.5px] leading-[1.9] text-zinc-800">
+    <div className="whitespace-pre-wrap text-[13.5px] leading-[1.9] text-ink">
       {segments.map((seg, i) =>
         seg.finding ? (
           <mark
@@ -335,12 +335,12 @@ function HighlightedText({
               seg.finding.severity === 'critical' && 'vl-hl-critical',
               seg.finding.severity === 'warning' && 'vl-hl-warning',
               seg.finding.severity === 'info' && 'vl-hl-info',
-              activeKey === seg.finding.key && 'outline outline-2 outline-offset-1 outline-zinc-900',
+              activeKey === seg.finding.key && 'outline outline-2 outline-offset-1 outline-ink',
               actionsBy.has(seg.finding.key) && 'vl-hl-info opacity-60'
             )}
           >
             {seg.text}
-            <sup className="ml-0.5 font-mono text-[9px] font-bold text-zinc-600">
+            <sup className="ml-0.5 font-mono text-[9px] font-bold text-stone-600">
               {actionsBy.has(seg.finding.key) ? '✓' : '!'}
             </sup>
           </mark>
@@ -424,8 +424,8 @@ function QueuedFinding({
       layout
       onClick={onActivate}
       className={cn(
-        'cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-colors',
-        active ? 'border-zinc-400 ring-1 ring-zinc-300' : 'border-zinc-200',
+        'cursor-pointer rounded-xl border bg-paper p-3 transition-colors',
+        active ? 'border-stone-400 ring-1 ring-stone-300' : 'border-line',
         action && 'opacity-90'
       )}
     >
@@ -438,14 +438,14 @@ function QueuedFinding({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <SeverityChip severity={finding.severity} />
-            <span className="font-mono text-[10px] font-bold text-zinc-400">{finding.key}</span>
+            <span className="font-mono text-[10px] font-bold text-stone-400">{finding.key}</span>
           </div>
-          <p className="mt-1.5 text-[13px] font-semibold leading-snug text-zinc-900">
+          <p className="mt-1.5 text-[13px] font-semibold leading-snug text-ink">
             {finding.title}
           </p>
         </div>
         {action && (
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[10px] font-bold text-olive-700">
             <Check className="h-3 w-3" />
             {action.action.toUpperCase()}
           </span>
@@ -453,7 +453,7 @@ function QueuedFinding({
       </div>
 
       {finding.quote && (
-        <p className="mt-1.5 rounded-md bg-zinc-100 px-2 py-1 font-mono text-[11px] leading-snug text-zinc-600">
+        <p className="mt-1.5 rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] leading-snug text-stone-600">
           “{finding.quote}”
         </p>
       )}
@@ -466,7 +466,7 @@ function QueuedFinding({
                 size="sm"
                 disabled={busy}
                 onClick={() => post({ action: 'accepted', appliedText: finding.suggestion })}
-                className="h-7 bg-emerald-600 px-2.5 text-[11px] hover:bg-emerald-500"
+                className="h-7 bg-terra-600 px-2.5 text-[11px] hover:bg-terra-500"
               >
                 <Check className="mr-1 h-3 w-3" />
                 Accept {finding.suggestionSource === 'ai' ? 'AI fix' : 'fix'}
@@ -517,29 +517,29 @@ function QueuedFinding({
               variant="outline"
               disabled={busy}
               onClick={() => setOverrideOpen(true)}
-              className="h-7 border-amber-300 px-2.5 text-[11px] text-amber-700 hover:bg-amber-50"
+              className="h-7 border-ochre-300 px-2.5 text-[11px] text-ochre-700 hover:bg-ochre-50"
             >
               <ShieldQuestion className="mr-1 h-3 w-3" /> Override
             </Button>
           </div>
 
           {rewrite && (
-            <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700">
+            <div className="rounded-lg border border-terra-200 bg-terra-50/60 p-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-terra-700">
                 Co-pilot rewrite · minimal diff, intent preserved
               </p>
-              <p className="mt-1 text-xs font-medium leading-relaxed text-teal-900">
+              <p className="mt-1 text-xs font-medium leading-relaxed text-terra-900">
                 “{rewrite.rewrite}”
               </p>
               {rewrite.intentNotes && (
-                <p className="mt-1 text-[10.5px] italic text-teal-700/80">
+                <p className="mt-1 text-[10.5px] italic text-terra-700/80">
                   {rewrite.intentNotes}
                 </p>
               )}
               <div className="mt-2 flex gap-1.5">
                 <Button
                   size="sm"
-                  className="h-7 bg-teal-600 px-2.5 text-[11px] hover:bg-teal-500"
+                  className="h-7 bg-terra-600 px-2.5 text-[11px] hover:bg-terra-500"
                   disabled={busy}
                   onClick={() => post({ action: 'accepted', appliedText: rewrite.rewrite })}
                 >
@@ -553,7 +553,7 @@ function QueuedFinding({
           )}
 
           {editing && (
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2.5">
+            <div className="rounded-lg border border-stone-200 bg-parchment p-2.5">
               <Textarea
                 className="min-h-[70px] text-xs"
                 value={editText}
@@ -563,7 +563,7 @@ function QueuedFinding({
               <div className="mt-1.5 flex gap-1.5">
                 <Button
                   size="sm"
-                  className="h-7 bg-zinc-900 px-2.5 text-[11px] hover:bg-zinc-800"
+                  className="h-7 bg-ink px-2.5 text-[11px] hover:bg-stone-800"
                   disabled={busy}
                   onClick={async () => {
                     if (await post({ action: 'edited', appliedText: editText })) setEditing(false)
@@ -580,11 +580,11 @@ function QueuedFinding({
         </div>
       ) : (
         <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-          <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+          <div className="rounded-lg border border-stone-200 bg-parchment p-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
               {action.action === 'overridden' ? 'Human override — original kept' : 'Replacement'}
             </p>
-            <p className="mt-0.5 text-[11.5px] leading-snug text-zinc-700">
+            <p className="mt-0.5 text-[11.5px] leading-snug text-stone-700">
               {action.action === 'overridden'
                 ? `“${action.note ?? ''}”`
                 : `“${finding.quote}” → “${action.appliedText}”`}
@@ -593,7 +593,7 @@ function QueuedFinding({
           <button
             onClick={undo}
             disabled={busy}
-            className="flex items-center gap-1 text-[10.5px] font-semibold text-zinc-400 hover:text-zinc-700"
+            className="flex items-center gap-1 text-[10.5px] font-semibold text-stone-400 hover:text-stone-700"
           >
             <Undo2 className="h-3 w-3" /> revise decision
           </button>
@@ -636,7 +636,7 @@ export function OverrideDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
-            className="bg-amber-600 hover:bg-amber-500"
+            className="bg-ochre-600 hover:bg-ochre-500"
             disabled={busy || note.trim().length < 15}
             onClick={async () => {
               setBusy(true)
@@ -677,7 +677,7 @@ function RemediateButton({
   return (
     <Button
       disabled={disabled || busy}
-      className="bg-emerald-600 hover:bg-emerald-500"
+      className="bg-terra-600 hover:bg-terra-500"
       onClick={async () => {
         setBusy(true)
         try {
