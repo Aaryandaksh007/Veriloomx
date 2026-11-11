@@ -4,6 +4,22 @@
 
 VeriLoom is a hackathon prototype for pre-publication brand governance. It gives a marketing team one auditable workflow: check a draft against a living brand vault, review grounded findings, make human decisions, and issue a tamper-evident approval certificate.
 
+You can run your own instance, adapt it to your organization, or contribute improvements. The source code is licensed under the [MIT License](./LICENSE); see [License and third-party services](#license-and-third-party-services) for important limits.
+
+## What you can do
+
+- **Authors** create marketing drafts, run six-pillar checks, and resolve or explain findings.
+- **Reviewers** inspect versions and request changes before release.
+- **Approvers** provide final sign-off and issue an integrity-hash certificate.
+- **Administrators** manage accounts and versioned brand rules in the Brand Vault.
+- **Evaluators** can try the browser-based instant scan and compare numeric claims between approved source copy and a channel adaptation.
+
+Each role is a separate account. An administrator provisions the team, and the server enforces role permissions.
+
+### Try the hosted demo
+
+Visit [veriloomx.vercel.app](https://veriloomx.vercel.app/) and choose **Fill demo credentials** on the sign-in page. The demo uses a shared public Author account; its drafts and actions are visible to other visitors. Do not enter real, confidential, or customer data.
+
 ## Architecture
 
 - **UI:** Next.js App Router, React, TypeScript, Tailwind CSS, and Zustand for transient workspace navigation state.
@@ -24,9 +40,17 @@ Audit history is read-only and can be rerun against saved draft versions and the
 
 The AI proposes and explains; deterministic code and human review remain in the loop. This is a prototype, not a legal compliance guarantee.
 
-## Run locally
+## Run your own instance
 
-Requirements: [Git](https://git-scm.com/), [Bun](https://bun.sh/), Python 3, PostgreSQL, a Google AI Studio API key, and a `NEXTAUTH_SECRET`. You can use local PostgreSQL or a hosted provider such as [Neon](https://neon.tech/); pgAdmin is a database client, not a database server.
+### Requirements
+
+- [Git](https://git-scm.com/)
+- [Bun](https://bun.sh/) (package manager and test runner)
+- [Python 3](https://www.python.org/) (used by image-processing/runtime checks)
+- PostgreSQL 15 or later, installed locally or provided by a host such as [Neon](https://neon.tech/)
+- A [Google AI Studio API key](https://aistudio.google.com/app/apikey) for Gemini-powered audit checks
+
+pgAdmin is a database client, not a database server. You may use another PostgreSQL host, but the database must be reachable from the application and support Prisma migrations.
 
 1. Clone the repository and install dependencies:
 
@@ -36,7 +60,9 @@ Requirements: [Git](https://git-scm.com/), [Bun](https://bun.sh/), Python 3, Pos
    bun install
    ```
 
-2. Copy `.env.example` to `.env` in the project root (PowerShell users can run `Copy-Item .env.example .env`) and replace its placeholder values:
+2. Create a PostgreSQL database for this app. For local PostgreSQL, create a database named `veriloom`; for a hosted database, create a project/database with your provider.
+
+3. Copy `.env.example` to `.env` in the repository root (PowerShell users can run `Copy-Item .env.example .env`) and replace its placeholder values:
 
    ```env
    DATABASE_URL=postgresql://USER:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require
@@ -51,16 +77,37 @@ Requirements: [Git](https://git-scm.com/), [Bun](https://bun.sh/), Python 3, Pos
    DEMO_LOGIN_PASSWORD=
    ```
 
-   The example URLs are templates: replace them with your provider's pooled (`DATABASE_URL`) and direct (`DIRECT_URL`) PostgreSQL URLs; for local PostgreSQL, both can use the same URL. Generate two different random values for `NEXTAUTH_SECRET` and `INITIAL_ADMIN_SETUP_KEY` (for example, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` twice). URL-encode special characters in database credentials. `.env` is ignored by Git; never commit secrets.
+   The example URLs are templates: replace them with your provider's pooled (`DATABASE_URL`) and direct (`DIRECT_URL`) PostgreSQL URLs. For a local PostgreSQL database named `veriloom`, both values can instead use:
 
-3. Apply the migrations and start the app:
+   ```env
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/veriloom?schema=public
+   DIRECT_URL=postgresql://USER:PASSWORD@localhost:5432/veriloom?schema=public
+   ```
+
+   Generate separate random values for `NEXTAUTH_SECRET` and `INITIAL_ADMIN_SETUP_KEY`, for example by running `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` twice. URL-encode reserved characters in database credentials. `.env` is ignored by Git; never commit secrets or place private keys in `NEXT_PUBLIC_*` variables.
+
+4. Apply the migrations and start the development server:
 
    ```sh
    bun run db:deploy
    bun run dev
    ```
 
-   Open `http://localhost:3000/setup` to create the first administrator account. Once it exists, the setup endpoint refuses further registration. Sign in, then create individual accounts from **Manage accounts**. The first authenticated dashboard request seeds the demo brand Vault and sample drafts.
+   Open `http://localhost:3000/setup`. Use the one-time setup key from `.env` to create your first Administrator. This first-run endpoint stops creating accounts once the first account exists. Sign in and create separate Author, Reviewer, and Approver accounts under **Manage accounts**. The first authenticated dashboard request seeds a sample brand Vault and drafts.
+
+5. Keep a valid `GEMINI_API_KEY` configured on the server to use the full AI-powered audit. Without it, Gemini-dependent checks cannot run; do not treat an incomplete audit as passing.
+
+### Common commands
+
+```sh
+bun run dev          # Start the development server
+bun run lint         # Run ESLint
+bun run typecheck    # Run TypeScript checks
+bun test             # Run unit tests
+bun run build        # Create a production build
+```
+
+In development, open `http://localhost:3000`. To run the production build locally, configure the required environment variables, then run `bun run build` followed by `bun run start`.
 
 ## Deploy to Vercel
 
@@ -109,18 +156,6 @@ Remove-Item Env:E2E_DATABASE_URL
 
 The runner creates a uniquely named temporary schema, starts a production server, and removes that schema afterward. Never point it at production data; the test also calls Gemini and can consume API quota.
 
-## Quality checks and production build
-
-```sh
-bun run lint
-bun run typecheck
-bun test
-bun run build
-bun run start
-```
-
-The production build type-checks the app. Vercel serves the app through its native Next.js integration.
-
 ## Current prototype boundaries
 
 - Credentials and server-enforced role checks are implemented, but there is no password-reset, MFA, invite flow, or rate limiting. Use unique strong passwords and an administrator-controlled deployment; do not treat this hackathon prototype as a hardened identity service.
@@ -134,6 +169,24 @@ The production build type-checks the app. Vercel serves the app through its nati
 3. **Governance operations:** add exportable audit evidence and configurable retention so administrators can archive decisions and certificates.
 
 These are planned follow-ups, not capabilities currently included in the prototype.
+
+## Contributing
+
+Contributions and forks are welcome. A practical contribution workflow is:
+
+1. Fork the repository and create a branch for your change.
+2. Install dependencies and configure a non-production PostgreSQL database.
+3. Make a focused change and add or update tests for behavior that changed.
+4. Run `bun run lint`, `bun run typecheck`, and `bun test`.
+5. Open a pull request describing the user problem, behavior change, and validation performed.
+
+Never include `.env` files, API keys, passwords, production data, or user content in a commit, issue, or pull request. Keep generated files and local database files out of pull requests unless the change specifically requires them.
+
+## License and third-party services
+
+This repository's original code and documentation are available under the [MIT License](./LICENSE). The license does not grant rights to third-party names, trademarks, logos, sample content, or other assets that may appear in the project. Dependencies retain their own licenses; review their notices before redistributing a bundled product.
+
+Running your own instance may require separate accounts, credentials, or payment with PostgreSQL and Google AI Studio (Gemini). Those services have their own terms, privacy policies, quotas, and costs. Do not send sensitive or customer data to an AI provider unless you have approval and have reviewed the provider's data terms. VeriLoom is a prototype and does not provide legal, regulatory, or security certification.
 
 ## API overview
 
