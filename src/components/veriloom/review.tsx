@@ -16,10 +16,11 @@ import {
   ImageIcon,
   History,
   GitCompareArrows,
+  AlertTriangle,
 } from 'lucide-react'
 import { useApp, type View } from '@/lib/store'
 import { wordDiff } from '@/lib/diff'
-import { ROLE_META, type CommentDTO, type DraftDTO, type DraftVersionDTO } from '@/lib/types'
+import { auditHasEngineErrors, ROLE_META, type CommentDTO, type DraftDTO, type DraftVersionDTO } from '@/lib/types'
 import { StatusChip, timeAgo, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -117,6 +118,8 @@ export function ReviewView() {
 
   const draft = detail?.draft ?? selected
   const versions = detail?.versions ?? []
+  const activeAudit = draft ? data?.audits[draft.id] : undefined
+  const activeIncomplete = Boolean(activeAudit && auditHasEngineErrors(activeAudit.pillars))
 
   return (
     <div className="space-y-5">
@@ -261,11 +264,32 @@ export function ReviewView() {
                 </div>
               </div>
 
+              {activeIncomplete && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-clay-500/40 bg-clay-950/60 px-3 py-2.5 text-xs text-clay-200">
+                  <span className="flex items-center gap-2 font-medium">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-clay-300" />
+                    Fail-safe gate active: this draft has an incomplete audit and cannot be submitted or approved until failed checks are recovered.
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-clay-400/50 bg-transparent text-[11px] font-semibold text-cream hover:bg-clay-900 hover:text-cream"
+                    onClick={() => {
+                      selectDraft(draft.id)
+                      useApp.getState().setView('audit')
+                    }}
+                  >
+                    Open Audit Studio
+                  </Button>
+                </div>
+              )}
+
               <div className="mt-3">
                 {role === 'creator' && (
                   draft.status === 'REMEDIATED' ? (
                     <Button
-                      disabled={busy}
+                      disabled={busy || activeIncomplete}
                       onClick={() => act('submit')}
                       className="bg-terra-500 text-cream hover:bg-terra-400"
                     >
@@ -305,7 +329,7 @@ export function ReviewView() {
                 {role === 'reviewer' && (
                   draft.status === 'IN_REVIEW' ? (
                     <Button
-                      disabled={busy}
+                      disabled={busy || activeIncomplete}
                       onClick={() => act('approve')}
                       className="bg-olive-600 text-cream hover:bg-olive-500"
                     >

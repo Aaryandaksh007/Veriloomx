@@ -69,6 +69,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -81,9 +87,46 @@ import { cn } from '@/lib/utils'
 
 export function AuditStudioView() {
   const { data, selectedDraftId, selectDraft, refresh, role } = useApp()
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
   const drafts = data?.drafts ?? []
+  const vault = data?.vault ?? []
   const selected = drafts.find((d) => d.id === selectedDraftId) ?? null
   const audit = selectedDraftId ? data?.audits[selectedDraftId] : undefined
+
+  const staleTargets = useMemo(() => {
+    const list = data?.drafts ?? []
+    const rules = data?.vault ?? []
+    const auditMap = data?.audits ?? {}
+    return list.filter((d) => {
+      if (d.status === 'APPROVED' || d.status === 'IN_REVIEW') return false
+      const a = auditMap[d.id]
+      return Boolean(a && diffVaultSnapshot(a.vaultSnapshot, rules).isStale)
+    })
+  }, [data])
+
+  const rerunAllStale = async () => {
+    if (role !== 'creator' || staleTargets.length === 0 || batchProgress) return
+    setBatchProgress({ done: 0, total: staleTargets.length })
+    let okCount = 0
+    try {
+      for (let i = 0; i < staleTargets.length; i++) {
+        const res = await fetch('/api/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draftId: staleTargets[i].id }),
+        })
+        if (res.ok) okCount++
+        setBatchProgress({ done: i + 1, total: staleTargets.length })
+      }
+      await refresh()
+      toast({
+        title: `Re-audited ${okCount}/${staleTargets.length} drifted draft${staleTargets.length === 1 ? '' : 's'}`,
+        description: 'Audits are now evaluated against live Brand Vault rule versions.',
+      })
+    } finally {
+      setBatchProgress(null)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -101,8 +144,31 @@ export function AuditStudioView() {
           </h2>
           {role === 'creator' && <NewDraftButton />}
         </div>
+        {role === 'creator' && staleTargets.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={batchProgress !== null}
+            onClick={() => void rerunAllStale()}
+            className="w-full justify-between border-ochre-300 bg-ochre-50/70 text-xs text-ochre-900 hover:bg-ochre-100"
+          >
+            <span className="flex items-center gap-1.5 truncate">
+              {batchProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              {batchProgress
+                ? `Re-auditing ${batchProgress.done}/${batchProgress.total}…`
+                : `Re-audit ${staleTargets.length} stale draft${staleTargets.length === 1 ? '' : 's'}`}
+            </span>
+          </Button>
+        )}
         <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
-          {drafts.map((d) => (
+          {drafts.map((d) => {
+            const draftAudit = data?.audits[d.id]
+            const draftIncomplete = draftAudit ? auditHasEngineErrors(draftAudit.pillars) : false
+            const draftStale =
+              d.status !== 'APPROVED' &&
+              draftAudit &&
+              diffVaultSnapshot(draftAudit.vaultSnapshot, vault).isStale
+            return (
             <button
               key={d.id}
               onClick={() => selectDraft(d.id)}
@@ -127,9 +193,24 @@ export function AuditStudioView() {
               <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-ink">
                 {d.title}
               </p>
-              <p className="mt-0.5 text-[11px] text-stone-400">by {d.creator}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-1.5">
+                <p className="text-[11px] text-stone-400">by {d.creator}</p>
+                <div className="flex items-center gap-1">
+                  {draftIncomplete && (
+                    <span className="rounded bg-clay-100 px-1.5 py-0.5 text-[9.5px] font-bold text-clay-700">
+                      Incomplete
+                    </span>
+                  )}
+                  {!draftIncomplete && draftStale && (
+                    <span className="rounded bg-ochre-100 px-1.5 py-0.5 text-[9.5px] font-bold text-ochre-800">
+                      Stale rules
+                    </span>
+                  )}
+                </div>
+              </div>
             </button>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -230,7 +311,13 @@ function DraftPanel({
     return true
   }
 
-  const runAudit = async (options: { version?: number; retryAuditId?: string } = {}) => {
+  const runAudit = async (
+    options: {
+      version?: number
+      retryAuditId?: string
+      simulateFailure?: 'tone' | 'claims' | 'vision'
+    } = {}
+  ) => {
     if (!canAuthor) return
     if (options.version === undefined && dirty) {
       const ok = await saveEdits()
@@ -254,6 +341,7 @@ function DraftPanel({
           draftId: draft.id,
           version: options.version,
           retryAuditId: options.retryAuditId,
+          simulateFailure: options.simulateFailure,
         }),
       })
       const body = await res.json()
@@ -362,7 +450,12 @@ function DraftPanel({
                 )}
                 <Button
                   onClick={() => void runAudit()}
-                  disabled={running || draft.status === 'APPROVED'}
+                  disabled={running || draft.status === 'APPROVED' || draft.status === 'IN_REVIEW'}
+                  title={
+                    draft.status === 'IN_REVIEW'
+                      ? 'Draft is In Review — audit an earlier version below or wait for review.'
+                      : undefined
+                  }
                   className="bg-terra-600 hover:bg-terra-500"
                 >
                   {running ? (
@@ -375,6 +468,48 @@ function DraftPanel({
                     </>
                   )}
                 </Button>
+                {draft.status !== 'APPROVED' && draft.status !== 'IN_REVIEW' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={running}
+                        title="Simulate an external AI engine timeout to verify fail-safe blocking and partial recovery"
+                        className="h-9 gap-1.5 border-stone-300 bg-paper px-2.5 text-xs font-medium text-ink-soft hover:text-ink"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-ochre-600" />
+                        Verify fail-safe…
+                        <ChevronDown className="h-3 w-3 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60">
+                      {draft.kind === 'text' ? (
+                        <>
+                          <DropdownMenuItem
+                            className="cursor-pointer text-xs"
+                            onSelect={() => void runAudit({ simulateFailure: 'tone' })}
+                          >
+                            Simulate Tone AI fault (blocks approval)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="cursor-pointer text-xs"
+                            onSelect={() => void runAudit({ simulateFailure: 'claims' })}
+                          >
+                            Simulate Claims AI fault (blocks approval)
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <DropdownMenuItem
+                          className="cursor-pointer text-xs"
+                          onSelect={() => void runAudit({ simulateFailure: 'vision' })}
+                        >
+                          Simulate Vision AI fault (blocks approval)
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </>
             ) : (
               <span className="rounded-md border border-line bg-parchment px-2.5 py-1.5 text-xs font-medium text-ink-soft">
@@ -586,8 +721,18 @@ function AuditResultPanel({
     () => (baselineRun ? compareAudits(baselineRun, result) : null),
     [baselineRun, result]
   )
+  const driftedClauseIds = useMemo(
+    () =>
+      new Set([
+        ...liveDrift.updated.map((u) => u.clauseId),
+        ...liveDrift.removed.map((r) => r.clauseId),
+      ]),
+    [liveDrift]
+  )
   const canRerunThisVersion =
-    canAuthor && !(draft.status === 'APPROVED' && result.version === draft.version)
+    canAuthor &&
+    !(draft.status === 'APPROVED' && result.version === draft.version) &&
+    !(draft.status === 'IN_REVIEW' && result.version === draft.version)
 
   const verdict = incomplete
     ? { text: 'Audit incomplete — rerun checks', cls: 'text-clay-600' }
@@ -816,7 +961,30 @@ function AuditResultPanel({
             </div>
           </div>
           {(impact.addedFindings.length > 0 || impact.resolvedFindings.length > 0 || impact.ruleChanges.length > 0) && (
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 space-y-3">
+              {impact.ruleChanges.length > 0 && (
+                <div className="rounded-lg border border-ochre-200 bg-ochre-50/60 p-3">
+                  <p className="text-[10.5px] font-bold uppercase tracking-wider text-ochre-800">
+                    Rule version changes between audits ({impact.ruleChanges.length})
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {impact.ruleChanges.map((rc) => (
+                      <span
+                        key={rc.clauseId}
+                        className="inline-flex items-center gap-1 rounded-md border border-ochre-300 bg-paper px-2 py-0.5 font-mono text-[10.5px] font-semibold text-ochre-900"
+                      >
+                        {rc.clauseId}:{' '}
+                        {rc.removed
+                          ? `v${rc.fromVer} → archived`
+                          : rc.fromVer === null
+                            ? `added at v${rc.toVer}`
+                            : `v${rc.fromVer} → v${rc.toVer}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-clay-200 bg-clay-50/40 p-3">
                 <p className="text-[10.5px] font-bold uppercase tracking-wider text-clay-700">
                   Added in this audit ({impact.addedFindings.length})
@@ -848,6 +1016,7 @@ function AuditResultPanel({
                     ))}
                   </ul>
                 )}
+              </div>
               </div>
             </div>
           )}
@@ -912,7 +1081,12 @@ function AuditResultPanel({
             </div>
           )}
           {result.findings.map((f) => (
-            <FindingCard key={f.key} finding={f} defaultOpen={f.severity === 'critical'} />
+            <FindingCard
+              key={f.key}
+              finding={f}
+              defaultOpen={f.severity === 'critical'}
+              isRuleUpdated={Boolean(f.clauseId && driftedClauseIds.has(f.clauseId))}
+            />
           ))}
         </div>
       </div>
@@ -1052,10 +1226,12 @@ function PillarCard({ summary }: { summary: PillarSummary }) {
 export function FindingCard({
   finding,
   defaultOpen = false,
+  isRuleUpdated = false,
   actions,
 }: {
   finding: Finding
   defaultOpen?: boolean
+  isRuleUpdated?: boolean
   actions?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -1086,6 +1262,11 @@ export function FindingCard({
                 {PILLAR_META[finding.pillar].short}
               </span>
               <ClauseBadge clauseId={finding.clauseId ?? '—'} />
+              {isRuleUpdated && (
+                <span className="rounded-md border border-ochre-300 bg-ochre-50 px-1.5 py-0.5 text-[10px] font-semibold text-ochre-800">
+                  Rule updated in live Vault
+                </span>
+              )}
               {typeof m.deltaE === 'number' && (
                 <span className="rounded-md bg-clay-50 px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-clay-700">
                   ΔE {m.deltaE} vs {String(m.closest)} (≤5.0)

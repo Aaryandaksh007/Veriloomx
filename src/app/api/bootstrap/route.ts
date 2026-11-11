@@ -109,6 +109,12 @@ export async function GET() {
   }))
 
   return NextResponse.json({
+    me: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
     vault: vaultDTO,
     drafts: draftDTO,
     audits: Object.fromEntries(latestAuditByDraft),

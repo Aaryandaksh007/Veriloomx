@@ -50,11 +50,16 @@ export default function SetupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-cream px-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-xl border border-line bg-paper p-6 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-cream px-4 py-8">
+      <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-xl border border-line bg-paper p-6 shadow-sm">
         <div>
-          <p className="font-serif text-2xl font-semibold text-ink">Set up VeriLoom</p>
-          <p className="mt-1 text-sm text-faint">Create the first administrator account.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-terra-600">
+            First-run Administrator setup
+          </p>
+          <p className="mt-1 font-serif text-2xl font-semibold text-ink">Set up VeriLoom</p>
+          <p className="mt-1 text-sm text-faint">
+            Create the initial administrator account. From there, use Manage accounts to provision separate Author, Reviewer, and Approver users.
+          </p>
         </div>
         {required === false ? (
           <p className="text-sm text-ink-soft">Initial setup is complete. <a className="font-semibold text-terra-700 underline" href="/login">Sign in</a>.</p>

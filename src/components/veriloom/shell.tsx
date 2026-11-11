@@ -50,7 +50,7 @@ export function Logo() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
-  const { view, setView, role, setIdentity, setAccountsDialogOpen, data, refresh, loading } = useApp()
+  const { view, setView, role, userName, setIdentity, setAccountsDialogOpen, data, refresh, loading } = useApp()
 
   useEffect(() => {
     if (!data) void refresh()
@@ -68,12 +68,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sessionRole = session?.user.role
     const sessionName = session?.user.name || session?.user.email || undefined
-    if (sessionRole && ['creator', 'manager', 'reviewer', 'admin'].includes(sessionRole)) {
+    if (sessionRole && ['creator', 'manager', 'reviewer', 'admin'].includes(sessionRole) && !data?.me) {
       setIdentity(sessionRole as Role, sessionName)
     }
-  }, [session?.user.role, session?.user.name, session?.user.email, setIdentity])
+  }, [session?.user.role, session?.user.name, session?.user.email, data?.me, setIdentity])
 
-  const identity = roleIdentity(role, session?.user.name || session?.user.email || 'Signed-in user')
+  const effectiveName = data?.me?.name || (userName !== 'Signed-in user' ? userName : undefined) || session?.user.name || session?.user.email || 'Signed-in user'
+  const identity = roleIdentity(role, effectiveName)
   const clauseCount = data?.vault.length ?? 0
   const draftCount = data?.drafts.length ?? 0
 
@@ -128,11 +129,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="space-y-3 border-t border-line p-4">
           <div className="rounded-lg border border-line bg-paper p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
-              Signed in
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+                Signed in
+              </p>
+              <span
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                  role === 'creator' && 'border-terra-200 bg-terra-50 text-terra-700',
+                  role === 'manager' && 'border-ochre-200 bg-ochre-50 text-ochre-800',
+                  role === 'reviewer' && 'border-olive-200 bg-olive-50 text-olive-800',
+                  role === 'admin' && 'border-stone-300 bg-ink text-cream'
+                )}
+              >
+                {identity.label}
+              </span>
+            </div>
+            <p className="mt-1 truncate font-semibold text-ink">{identity.name}</p>
+            <p className="text-[11px] text-faint">
+              {role === 'creator'
+                ? 'Drafts · Audits · Remediate · Submit'
+                : role === 'manager'
+                  ? 'Diffs · Threads · Request changes'
+                  : role === 'reviewer'
+                    ? 'Final sign-off · Certificates'
+                    : 'Accounts · Versioned Brand Vault'}
             </p>
-            <p className="mt-1 font-semibold text-ink">{identity.name}</p>
-            <p className="text-xs text-faint">{identity.label}</p>
             {role === 'admin' && <div className="mt-3"><UserManagement /></div>}
             <Button variant="ghost" size="sm" className="mt-2 h-7 px-0 text-xs text-faint" onClick={() => void signOut({ callbackUrl: '/login' })}>
               Sign out

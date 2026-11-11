@@ -147,18 +147,20 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       })
     : existing
 
-  await db.eventLog.create({
-    data: {
-      actor: user.name,
-      action: 'VAULT_EDIT',
-      details: JSON.stringify({
-        verb: 'updated',
-        clauseId: item.clauseId,
-        fields: Object.keys(data),
-        ruleVer: item.ruleVer,
-      }),
-    },
-  })
+  if (changed) {
+    await db.eventLog.create({
+      data: {
+        actor: user.name,
+        action: 'VAULT_EDIT',
+        details: JSON.stringify({
+          verb: 'updated',
+          clauseId: item.clauseId,
+          fields: Object.keys(data),
+          ruleVer: item.ruleVer,
+        }),
+      },
+    })
+  }
 
   return NextResponse.json({
     item: {

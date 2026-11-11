@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { diffVaultSnapshot, compareAudits } from '../../src/lib/vault-lineage'
+import { diffVaultSnapshot, compareAudits, computeVaultBlastRadius } from '../../src/lib/vault-lineage'
 import { selectGoverningAudit, selectWorkspaceAudit } from '../../src/lib/governance'
 import { wordDiff } from '../../src/lib/diff'
 import type { AuditResult, Finding, PillarSummary } from '../../src/lib/types'
@@ -195,5 +195,73 @@ describe('wordDiff', () => {
     expect(tokens.filter((t) => t.op === 'remove').map((t) => t.text).join('').trim()).toBe('$999')
     expect(tokens.filter((t) => t.op === 'add').map((t) => t.text).join('').trim()).toBe('$29')
     expect(tokens.some((t) => t.op === 'same' && t.text.includes('Starter'))).toBe(true)
+  })
+})
+
+describe('computeVaultBlastRadius', () => {
+  test('ignores APPROVED drafts and maps updated, added, and removed rules with cited counts', () => {
+    const drafts = [
+      { id: 'd-approved', title: 'Sealed launch post', status: 'APPROVED', version: 2 },
+      { id: 'd-audited', title: 'Landing pricing', status: 'AUDITED', version: 1 },
+      { id: 'd-review', title: 'Email sequence', status: 'IN_REVIEW', version: 1 },
+      { id: 'd-clean', title: 'Already synced', status: 'AUDITED', version: 1 },
+    ]
+    const vault = [
+      { clauseId: 'VL-FACT-001', title: 'Approved pricing', ruleVer: 2, active: true },
+      { clauseId: 'VL-TERM-001', title: 'Deprecated term', ruleVer: 1, active: false },
+      { clauseId: 'VL-FACT-009', title: 'New SLA claim', ruleVer: 1, active: true },
+    ]
+    const audits = {
+      'd-approved': makeAudit({
+        vaultSnapshot: [{ clauseId: 'VL-FACT-001', ruleVer: 1 }],
+      }),
+      'd-audited': makeAudit({
+        score: 72,
+        findings: [
+          makeFinding({ key: 'f1', clauseId: 'VL-FACT-001' }),
+          makeFinding({ key: 'f2', clauseId: 'VL-FACT-001' }),
+        ],
+        vaultSnapshot: [
+          { clauseId: 'VL-FACT-001', ruleVer: 1 },
+          { clauseId: 'VL-TERM-001', ruleVer: 1 },
+        ],
+      }),
+      'd-review': makeAudit({
+        score: 90,
+        findings: [makeFinding({ key: 'f3', clauseId: 'VL-TERM-001' })],
+        vaultSnapshot: [
+          { clauseId: 'VL-FACT-001', ruleVer: 2 },
+          { clauseId: 'VL-TERM-001', ruleVer: 1 },
+        ],
+      }),
+      'd-clean': makeAudit({
+        score: 100,
+        findings: [],
+        vaultSnapshot: [
+          { clauseId: 'VL-FACT-001', ruleVer: 2 },
+          { clauseId: 'VL-FACT-009', ruleVer: 1 },
+        ],
+      }),
+    }
+
+    const radius = computeVaultBlastRadius(drafts, audits, vault)
+
+    expect(radius.staleDraftIds).toEqual(['d-audited', 'd-review'])
+    expect(radius.byClause['VL-FACT-001']).toEqual([
+      {
+        draftId: 'd-audited',
+        draftTitle: 'Landing pricing',
+        draftStatus: 'AUDITED',
+        draftVersion: 1,
+        auditScore: 72,
+        changeKind: 'updated',
+        auditedVer: 1,
+        liveVer: 2,
+        citedFindingsCount: 2,
+      },
+    ])
+    expect(radius.byClause['VL-TERM-001'].map((e) => e.draftId)).toEqual(['d-audited', 'd-review'])
+    expect(radius.byClause['VL-TERM-001'][1].citedFindingsCount).toBe(1)
+    expect(radius.byClause['VL-FACT-009'].map((e) => e.changeKind)).toEqual(['added', 'added'])
   })
 })

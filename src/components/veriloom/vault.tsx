@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import type { VaultItemDTO } from '@/lib/types'
-import { diffVaultSnapshot } from '@/lib/vault-lineage'
+import { computeVaultBlastRadius, type ClauseBlastDraft } from '@/lib/vault-lineage'
 import { wordDiff } from '@/lib/diff'
 import { ClauseBadge, HexSwatch, timeAgo, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
@@ -74,36 +74,28 @@ const TYPE_META: Record<
 type TabKey = 'ALL' | VaultItemDTO['type']
 
 export function VaultView() {
-  const { data, refresh, role, setView } = useApp()
+  const { data, refresh, role, selectDraft } = useApp()
   const [tab, setTab] = useState<TabKey>('ALL')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<VaultItemDTO | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<VaultItemDTO | null>(null)
+  const [blastClause, setBlastClause] = useState<VaultItemDTO | null>(null)
 
-  const driftSummary = useMemo(() => {
-    const vault = data?.vault ?? []
-    const drafts = (data?.drafts ?? []).filter((d) => d.status !== 'APPROVED')
-    const affectedByClause = new Map<string, number>()
-    let staleDraftCount = 0
-    for (const draft of drafts) {
-      const audit = data?.audits[draft.id]
-      if (!audit) continue
-      const diff = diffVaultSnapshot(audit.vaultSnapshot, vault)
-      if (!diff.isStale) continue
-      staleDraftCount++
-      for (const u of diff.updated) {
-        affectedByClause.set(u.clauseId, (affectedByClause.get(u.clauseId) ?? 0) + 1)
-      }
-      for (const a of diff.added) {
-        affectedByClause.set(a.clauseId, (affectedByClause.get(a.clauseId) ?? 0) + 1)
-      }
-      for (const r of diff.removed) {
-        affectedByClause.set(r.clauseId, (affectedByClause.get(r.clauseId) ?? 0) + 1)
-      }
-    }
-    return { staleDraftCount, affectedByClause }
-  }, [data])
+  const blast = useMemo(
+    () =>
+      computeVaultBlastRadius(
+        data?.drafts ?? [],
+        data?.audits ?? {},
+        data?.vault ?? []
+      ),
+    [data]
+  )
+
+  const staleDraftObjects = useMemo(() => {
+    const idSet = new Set(blast.staleDraftIds)
+    return (data?.drafts ?? []).filter((d) => idSet.has(d.id))
+  }, [data, blast.staleDraftIds])
 
   const items = useMemo(() => {
     let list = data?.vault ?? []
@@ -166,23 +158,39 @@ export function VaultView() {
         </div>
       </div>
 
-      {driftSummary.staleDraftCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ochre-300 bg-ochre-50/70 px-4 py-3">
-          <p className="flex items-center gap-2 text-xs text-ochre-900">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-ochre-600" />
-            <span>
-              <strong>Policy drift detected:</strong> {driftSummary.staleDraftCount} in-flight draft
-              {driftSummary.staleDraftCount === 1 ? ' was' : 's were'} audited against older rule versions.
-            </span>
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 border-ochre-300 bg-paper text-xs text-ochre-800 hover:bg-ochre-100"
-            onClick={() => setView('audit')}
-          >
-            Inspect &amp; rerun in Audit Studio
-          </Button>
+      {blast.staleDraftIds.length > 0 && (
+        <div className="space-y-2.5 rounded-xl border border-ochre-300 bg-ochre-50/70 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-xs text-ochre-900">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-ochre-600" />
+              <span>
+                <strong>Policy drift detected:</strong> {blast.staleDraftIds.length} in-flight draft
+                {blast.staleDraftIds.length === 1 ? ' was' : 's were'} audited against older rule versions.
+              </span>
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 border-ochre-300 bg-paper text-xs text-ochre-800 hover:bg-ochre-100"
+              onClick={() => selectDraft(staleDraftObjects[0]?.id ?? null, 'audit')}
+            >
+              Inspect &amp; rerun in Audit Studio
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {staleDraftObjects.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => selectDraft(d.id, 'audit')}
+                className="inline-flex items-center gap-1 rounded-full border border-ochre-300 bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ochre-900 transition-colors hover:border-terra-400 hover:text-terra-700"
+              >
+                <span className="max-w-[200px] truncate">{d.title}</span>
+                <span className="text-[10px] text-faint">v{d.version}</span>
+                <ArrowRight className="h-3 w-3 shrink-0" />
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -191,7 +199,8 @@ export function VaultView() {
           <VaultCard
             key={item.id}
             item={item}
-            affectedDraftCount={driftSummary.affectedByClause.get(item.clauseId) ?? 0}
+            affectedDrafts={blast.byClause[item.clauseId] ?? []}
+            onInspectBlast={() => setBlastClause(item)}
             onEdit={() => setEditing(item)}
             onDelete={() => setDeleting(item)}
           />
@@ -243,18 +252,62 @@ export function VaultView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={blastClause !== null} onOpenChange={(o) => !o && setBlastClause(null)}>
+        <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Policy blast radius — {blastClause?.clauseId}</DialogTitle>
+            <DialogDescription>
+              In-flight drafts audited before the latest change to “{blastClause?.title}”. Open any draft in Audit Studio to evaluate the updated rule and compare score &amp; findings diff.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2.5">
+            {(blastClause ? blast.byClause[blastClause.clauseId] ?? [] : []).map((entry) => (
+              <div
+                key={entry.draftId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-paper p-3 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">{entry.draftTitle}</p>
+                  <p className="mt-0.5 text-[11px] text-ink-soft">
+                    Draft v{entry.draftVersion} ({entry.draftStatus}) · last score {entry.auditScore}/100 ·{' '}
+                    {entry.changeKind === 'updated'
+                      ? `audited rule v${entry.auditedVer} → live v${entry.liveVer}`
+                      : entry.changeKind === 'added'
+                        ? `new rule added at v${entry.liveVer}`
+                        : `archived since audited v${entry.auditedVer}`}
+                    {entry.citedFindingsCount > 0 ? ` · ${entry.citedFindingsCount} finding(s) cited this clause` : ''}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-7 shrink-0 bg-terra-600 px-2.5 text-[11px] hover:bg-terra-500"
+                  onClick={() => {
+                    setBlastClause(null)
+                    selectDraft(entry.draftId, 'audit')
+                  }}
+                >
+                  Open &amp; rerun <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 function VaultCard({
   item,
-  affectedDraftCount,
+  affectedDrafts,
+  onInspectBlast,
   onEdit,
   onDelete,
 }: {
   item: VaultItemDTO
-  affectedDraftCount: number
+  affectedDrafts: ClauseBlastDraft[]
+  onInspectBlast: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -366,10 +419,15 @@ function VaultCard({
           <span className="text-[10.5px] text-faint">
             Updated {timeAgo(item.updatedAt)} · v{item.ruleVer}
           </span>
-          {affectedDraftCount > 0 && (
-            <span className="rounded-full border border-ochre-300 bg-ochre-50 px-2 py-0.5 text-[10px] font-semibold text-ochre-700">
-              Impacts {affectedDraftCount} audited {affectedDraftCount === 1 ? 'draft' : 'drafts'}
-            </span>
+          {affectedDrafts.length > 0 && (
+            <button
+              type="button"
+              onClick={onInspectBlast}
+              className="rounded-full border border-ochre-300 bg-ochre-50 px-2 py-0.5 text-[10px] font-semibold text-ochre-800 transition-colors hover:border-terra-400 hover:bg-ochre-100"
+              title="Click to inspect drifted drafts impacted by this rule"
+            >
+              Impacts {affectedDrafts.length} {affectedDrafts.length === 1 ? 'draft' : 'drafts'} · Inspect
+            </button>
           )}
         </div>
         {role === 'admin' ? (

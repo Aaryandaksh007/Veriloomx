@@ -147,7 +147,11 @@ function computeScore(findings: Finding[]): number {
 export async function runAudit(
   draftId: string,
   actor = 'Maya Chen',
-  options: { version?: number; retryAuditId?: string } = {}
+  options: {
+    version?: number
+    retryAuditId?: string
+    simulateFailure?: 'tone' | 'claims' | 'vision'
+  } = {}
 ): Promise<AuditResult> {
   const currentDraft = await db.draft.findUnique({ where: { id: draftId } })
   if (!currentDraft) throw new Error('Draft not found')
@@ -308,6 +312,19 @@ export async function runAudit(
             summary: priorPillars.get('tone')!,
           }
         }
+        if (options.simulateFailure === 'tone') {
+          return {
+            findings: [] as Finding[],
+            summary: pillarSummary(
+              'tone',
+              [],
+              Date.now() - s,
+              'Simulated Tone AI check fault (fail-safe check) — retry failed checks to recover',
+              false,
+              true
+            ),
+          }
+        }
         const res = await runToneRag(redactedText ?? draft.content, vault, draft.channel)
         ledger.push(...res.ledger)
         suppressed += res.suppressed
@@ -339,6 +356,19 @@ export async function runAudit(
           return {
             findings: priorFindings.filter((f) => f.pillar === 'claims'),
             summary: priorPillars.get('claims')!,
+          }
+        }
+        if (options.simulateFailure === 'claims') {
+          return {
+            findings: [] as Finding[],
+            summary: pillarSummary(
+              'claims',
+              [],
+              Date.now() - s,
+              'Simulated Claims AI check fault (fail-safe check) — retry failed checks to recover',
+              false,
+              true
+            ),
           }
         }
         const res = await runClaimsRag(redactedText ?? draft.content, vault, draft.channel)
@@ -403,11 +433,14 @@ export async function runAudit(
         const a11yRule = vault.find((v) => v.clauseId === 'VL-A11Y-001') ?? null
         const logoRule = vault.find((v) => v.type === 'LOGO') ?? null
         let vlm: Awaited<ReturnType<typeof runImageVlm>> | null = null
-        try {
-          vlm = await runImageVlm(draft.imageData, { a11y: a11yRule, logo: logoRule })
-          ledger.push(...vlm.ledger)
-        } catch (error) {
-          console.error('[audit] image vision engine failure:', error)
+        const simulatedVisionFault = options.simulateFailure === 'vision'
+        if (!simulatedVisionFault) {
+          try {
+            vlm = await runImageVlm(draft.imageData, { a11y: a11yRule, logo: logoRule })
+            ledger.push(...vlm.ledger)
+          } catch (error) {
+            console.error('[audit] image vision engine failure:', error)
+          }
         }
         const visionAvailable = vlm !== null && !vlm.parseError
         const visionResult = vlm ?? {
@@ -471,7 +504,9 @@ export async function runAudit(
             Date.now() - s,
             visionAvailable
               ? `${visionResult.extractedTexts.length} text regions sampled by VLM · contrast computed with exact WCAG 2.1 luminance math`
-              : `${a11yFindings.length} alt-text check completed; image text/contrast could not be sampled — retry failed checks before review`,
+              : simulatedVisionFault
+                ? `Simulated Vision AI fault (fail-safe check); alt-text check completed (${a11yFindings.length}) — retry failed checks to recover`
+                : `${a11yFindings.length} alt-text check completed; image text/contrast could not be sampled — retry failed checks before review`,
             false,
             !visionAvailable
           ),
@@ -577,9 +612,11 @@ export async function runAudit(
                 ? 'error'
                 : claimsRag.summary.status,
             detail:
-              claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
-                ? 'Claims verification incomplete — rerun before review'
-                : `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
+              claimsScan.summary.status === 'error'
+                ? 'Deterministic claims scan failed — rerun before review'
+                : claimsRag.summary.status === 'error'
+                  ? claimsRag.summary.detail || 'Claims verification incomplete — rerun before review'
+                  : `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
           },
       pillarSummary('visual', [], 0, 'Skipped — text-only draft', true),
       pillarSummary('accessibility', [], 0, 'Skipped — text-only draft', true),
@@ -652,6 +689,7 @@ export async function runAudit(
         findings: allFindings.length,
         suppressed,
         durationMs: totalMs,
+        ...(options.simulateFailure ? { simulatedFailure: options.simulateFailure } : {}),
         ...(recoveryNote ?? {}),
       }),
     },
@@ -668,7 +706,7 @@ export async function runAudit(
     })
   }
 
-  if (draft.version === currentDraft.version && ['DRAFT', 'CHANGES_REQUESTED'].includes(draft.status)) {
+  if (draft.version === currentDraft.version && ['DRAFT', 'CHANGES_REQUESTED', 'REMEDIATED'].includes(draft.status)) {
     await db.draft.update({ where: { id: draftId }, data: { status: 'AUDITED' } })
   }
 

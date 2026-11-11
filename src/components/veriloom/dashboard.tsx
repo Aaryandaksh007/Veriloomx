@@ -107,6 +107,98 @@ export function DashboardView() {
         )
       : []
 
+  const roleQueueAction = useMemo((): { label: string; badge: string; onClick: () => void } => {
+    const allDrafts = data?.drafts ?? []
+    const auditsById = data?.audits ?? {}
+    const vaultItems = data?.vault ?? []
+    const firstIncomplete = allDrafts.find((d) => {
+      const a = auditsById[d.id]
+      return d.status !== 'APPROVED' && a && auditHasEngineErrors(a.pillars)
+    })
+    const staleCount = allDrafts.filter((d) => {
+      const a = auditsById[d.id]
+      return d.status !== 'APPROVED' && a && diffVaultSnapshot(a.vaultSnapshot, vaultItems).isStale
+    }).length
+
+    if (role === 'creator') {
+      if (firstIncomplete) {
+        return {
+          badge: 'Fail-safe recovery',
+          label: `Recover incomplete check · ${firstIncomplete.title}`,
+          onClick: () => selectDraft(firstIncomplete.id, 'audit'),
+        }
+      }
+      const nextFix = allDrafts.find((d) => d.status === 'CHANGES_REQUESTED' || d.status === 'AUDITED')
+      if (nextFix) {
+        return {
+          badge: nextFix.status === 'CHANGES_REQUESTED' ? 'Changes requested' : 'Needs remediation',
+          label: `Open Remediation · ${nextFix.title}`,
+          onClick: () => selectDraft(nextFix.id, 'remediation'),
+        }
+      }
+      const nextSubmit = allDrafts.find((d) => d.status === 'REMEDIATED')
+      if (nextSubmit) {
+        return {
+          badge: 'Ready to submit',
+          label: `Submit for review · ${nextSubmit.title}`,
+          onClick: () => selectDraft(nextSubmit.id, 'review'),
+        }
+      }
+      const nextDraft = allDrafts.find((d) => d.status === 'DRAFT') ?? allDrafts[0]
+      return {
+        badge: 'Author queue',
+        label: nextDraft ? `Run 6-pillar audit · ${nextDraft.title}` : 'Open Audit Studio',
+        onClick: () => (nextDraft ? selectDraft(nextDraft.id, 'audit') : setView('audit')),
+      }
+    }
+
+    if (role === 'manager') {
+      const waiting = allDrafts.filter((d) => d.status === 'IN_REVIEW')
+      if (waiting[0]) {
+        return {
+          badge: `${waiting.length} in review`,
+          label: `Review & screen · ${waiting[0].title}`,
+          onClick: () => selectDraft(waiting[0].id, 'review'),
+        }
+      }
+      return {
+        badge: '0 waiting',
+        label: 'Inspect version diffs in Review',
+        onClick: () => setView('review'),
+      }
+    }
+
+    if (role === 'reviewer') {
+      const waiting = allDrafts.filter((d) => d.status === 'IN_REVIEW')
+      if (waiting[0]) {
+        return {
+          badge: `${waiting.length} awaiting sign-off`,
+          label: `Approve & certify · ${waiting[0].title}`,
+          onClick: () => selectDraft(waiting[0].id, 'review'),
+        }
+      }
+      const certified = allDrafts.find((d) => d.status === 'APPROVED')
+      return {
+        badge: 'Approver queue',
+        label: certified ? `Inspect certificate · ${certified.title}` : 'Open Review & Approval',
+        onClick: () => (certified ? selectDraft(certified.id, 'certificate') : setView('review')),
+      }
+    }
+
+    if (staleCount > 0) {
+      return {
+        badge: `${staleCount} drifted`,
+        label: 'Inspect policy drift in Brand Vault',
+        onClick: () => setView('vault'),
+      }
+    }
+    return {
+      badge: `${vaultItems.length} clauses`,
+      label: 'Manage rules in Brand Vault',
+      onClick: () => setView('vault'),
+    }
+  }, [data, role, selectDraft, setView])
+
   const tryFailure = (failureId: FailureId) => {
     if (failureId === 'facts' || failureId === 'tone') {
       setRequestedPlaygroundSample(failureId === 'facts' ? 'pricing' : 'hell')
@@ -137,6 +229,7 @@ export function DashboardView() {
         role={role}
         userName={userName}
         roleLabel={roleIdentity(role, userName).label}
+        roleQueueAction={roleQueueAction}
         onTryLive={() => {
           document
             .getElementById('live-playground')
@@ -258,6 +351,7 @@ function CommandBar({
   role,
   userName,
   roleLabel,
+  roleQueueAction,
   onTryLive,
   onDemoAudit,
 }: {
@@ -268,6 +362,7 @@ function CommandBar({
   role: Role
   userName: string
   roleLabel: string
+  roleQueueAction: { badge: string; label: string; onClick: () => void }
   onTryLive: () => void
   onDemoAudit: () => void
 }) {
@@ -361,10 +456,21 @@ function CommandBar({
       </div>
 
       {/* hairline role bar */}
-      <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-2.5 sm:px-7">
-        <p className="truncate text-[11px] text-ink-soft">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-2.5 sm:px-7">
+        <p className="min-w-0 truncate text-[11px] text-ink-soft">
           Signed in as <span className="font-semibold text-ink">{userName}</span> ({roleLabel}) — {ROLE_META[role].desc}. Actions across VeriLoom reflect your verified permissions.
         </p>
+        <button
+          type="button"
+          onClick={roleQueueAction.onClick}
+          className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full border border-terra-200 bg-paper px-3 py-1 text-[11px] font-semibold text-terra-700 transition-colors hover:border-terra-300 hover:bg-terra-50"
+        >
+          <span className="rounded bg-terra-50 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-terra-700">
+            {roleQueueAction.badge}
+          </span>
+          <span className="max-w-[240px] truncate">{roleQueueAction.label}</span>
+          <ArrowRight className="h-3 w-3 shrink-0" />
+        </button>
       </div>
     </motion.section>
   )

@@ -107,3 +107,92 @@ export function compareAudits(baseline: AuditResult, current: AuditResult): Audi
   }
 }
 
+export interface ClauseBlastDraft {
+  draftId: string
+  draftTitle: string
+  draftStatus: string
+  draftVersion: number
+  auditScore: number
+  changeKind: 'updated' | 'added' | 'removed'
+  auditedVer: number | null
+  liveVer: number | null
+  citedFindingsCount: number
+}
+
+export interface VaultBlastRadius {
+  staleDraftIds: string[]
+  byClause: Record<string, ClauseBlastDraft[]>
+}
+
+export function computeVaultBlastRadius(
+  drafts: readonly { id: string; title: string; status: string; version: number }[],
+  audits: Record<string, Pick<AuditResult, 'score' | 'vaultSnapshot' | 'findings'> | undefined>,
+  vault: readonly Pick<VaultItemDTO, 'clauseId' | 'title' | 'ruleVer' | 'active'>[]
+): VaultBlastRadius {
+  const staleDraftIds: string[] = []
+  const byClause: Record<string, ClauseBlastDraft[]> = {}
+
+  const pushEntry = (clauseId: string, entry: ClauseBlastDraft) => {
+    if (!byClause[clauseId]) byClause[clauseId] = []
+    byClause[clauseId].push(entry)
+  }
+
+  for (const draft of drafts) {
+    if (draft.status === 'APPROVED') continue
+    const audit = audits[draft.id]
+    if (!audit) continue
+    const diff = diffVaultSnapshot(audit.vaultSnapshot, vault)
+    if (!diff.isStale) continue
+
+    staleDraftIds.push(draft.id)
+    const findingsByClause = new Map<string, number>()
+    for (const f of audit.findings) {
+      if (f.clauseId) {
+        findingsByClause.set(f.clauseId, (findingsByClause.get(f.clauseId) ?? 0) + 1)
+      }
+    }
+
+    for (const u of diff.updated) {
+      pushEntry(u.clauseId, {
+        draftId: draft.id,
+        draftTitle: draft.title,
+        draftStatus: draft.status,
+        draftVersion: draft.version,
+        auditScore: audit.score,
+        changeKind: 'updated',
+        auditedVer: u.auditedVer,
+        liveVer: u.liveVer,
+        citedFindingsCount: findingsByClause.get(u.clauseId) ?? 0,
+      })
+    }
+    for (const a of diff.added) {
+      pushEntry(a.clauseId, {
+        draftId: draft.id,
+        draftTitle: draft.title,
+        draftStatus: draft.status,
+        draftVersion: draft.version,
+        auditScore: audit.score,
+        changeKind: 'added',
+        auditedVer: null,
+        liveVer: a.liveVer,
+        citedFindingsCount: 0,
+      })
+    }
+    for (const r of diff.removed) {
+      pushEntry(r.clauseId, {
+        draftId: draft.id,
+        draftTitle: draft.title,
+        draftStatus: draft.status,
+        draftVersion: draft.version,
+        auditScore: audit.score,
+        changeKind: 'removed',
+        auditedVer: r.auditedVer,
+        liveVer: null,
+        citedFindingsCount: findingsByClause.get(r.clauseId) ?? 0,
+      })
+    }
+  }
+
+  return { staleDraftIds, byClause }
+}
+

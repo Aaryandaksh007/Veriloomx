@@ -31,6 +31,7 @@ export interface EventDTO {
 }
 
 export interface BootstrapData {
+  me?: { id: string; name: string; email: string; role: Role }
   vault: VaultItemDTO[]
   drafts: DraftDTO[]
   audits: Record<string, AuditResult>
@@ -83,13 +84,18 @@ export const useApp = create<AppState>()(
           const res = await fetch('/api/bootstrap', { cache: 'no-store' })
           if (res.status === 401) {
             if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-              window.location.assign('/login')
+              const { signOut } = await import('next-auth/react')
+              await signOut({ callbackUrl: '/login?reason=expired' })
             }
             return
           }
           if (res.ok) {
             const data = (await res.json()) as BootstrapData
-            set({ data })
+            set((s) => ({
+              data,
+              role: data.me?.role ?? s.role,
+              userName: data.me?.name ?? s.userName,
+            }))
           }
         } finally {
           set({ loading: false })

@@ -5,6 +5,7 @@ import { serialiseAudit } from '@/lib/audit/engine'
 import { auditHasEngineErrors, type CertificateData, type Finding, type FindingActionDTO, type PillarSummary } from '@/lib/types'
 import { currentUser } from '@/lib/authorization'
 import { selectGoverningAudit } from '@/lib/governance'
+import { buildCertificateCanonicalJson } from '@/lib/certificate-hash'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,7 +106,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     }))
 
   // ── tamper-evident integrity hash ─────────────────────────
-  const canonical = JSON.stringify({
+  const canonical = buildCertificateCanonicalJson({
     draft: { id: draft.id, title: draft.title, version: draft.version, channel: draft.channel },
     audit: {
       id: audit.id,

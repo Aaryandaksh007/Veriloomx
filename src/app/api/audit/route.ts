@@ -21,6 +21,16 @@ export async function POST(req: NextRequest) {
     typeof body?.retryAuditId === 'string' && body.retryAuditId.trim()
       ? body.retryAuditId.trim()
       : undefined
+  const rawSim = body?.simulateFailure
+  const simulateFailure =
+    rawSim === undefined || rawSim === null
+      ? undefined
+      : typeof rawSim === 'string' && ['tone', 'claims', 'vision'].includes(rawSim)
+        ? (rawSim as 'tone' | 'claims' | 'vision')
+        : null
+  if (simulateFailure === null) {
+    return NextResponse.json({ error: 'simulateFailure must be tone, claims, or vision' }, { status: 400 })
+  }
 
   const draft = await db.draft.findUnique({ where: { id: draftId } })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
@@ -54,6 +64,24 @@ export async function POST(req: NextRequest) {
       { status: 409 }
     )
   }
+  if (draft.status === 'IN_REVIEW' && targetVersion === draft.version) {
+    return NextResponse.json(
+      { error: 'This draft is currently In Review — wait for reviewer feedback or audit a historical version.' },
+      { status: 409 }
+    )
+  }
+  if (simulateFailure === 'vision' && draft.kind !== 'image') {
+    return NextResponse.json(
+      { error: 'Vision check simulation only applies to image drafts.' },
+      { status: 400 }
+    )
+  }
+  if ((simulateFailure === 'tone' || simulateFailure === 'claims') && draft.kind !== 'text') {
+    return NextResponse.json(
+      { error: `${simulateFailure} check simulation only applies to text drafts.` },
+      { status: 400 }
+    )
+  }
   if (retryAuditId) {
     const prior = await db.auditRun.findUnique({
       where: { id: retryAuditId },
@@ -68,7 +96,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runAudit(draftId, user.name, { version, retryAuditId })
+    const result = await runAudit(draftId, user.name, { version, retryAuditId, simulateFailure })
     return NextResponse.json({ audit: result })
   } catch (err) {
     console.error('[audit] engine failure:', err)
