@@ -17,6 +17,7 @@ Audit history is read-only and can be rerun against saved draft versions and the
 ## What makes the demo different
 
 - **Deterministic checks where exactness matters:** terminology, numeric claims, color distance (ΔE2000), contrast ratios (WCAG), and local confidentiality scrubbing.
+- **Cross-channel claim drift:** compare approved source copy with an email, ad, or social adaptation; numeric changes and omissions are surfaced locally before a full audit.
 - **AI where language understanding helps:** Gemini reviews tone and claims against the brand vault, and samples text regions in images. AI findings are citation-checked before they are shown.
 - **Humans remain accountable:** findings can be accepted, edited, or overridden with a written reason; decisions are included in the audit trail.
 - **One end-to-end story:** draft → audit → resolve → remediate → review → certificate.

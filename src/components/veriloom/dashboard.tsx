@@ -29,6 +29,7 @@ import { diffVaultSnapshot } from '@/lib/vault-lineage'
 import { AnimatedNumber, EngineChip, StatusChip, timeAgo } from './shared'
 import { ProblemSection, type FailureId } from './problem-section'
 import { LivePlayground } from './live-playground'
+import { CampaignDriftChecker } from './campaign-drift-checker'
 import { DemoChecklist } from './demo-checklist'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -287,6 +288,8 @@ export function DashboardView() {
           onSampleLoaded={clearRequestedPlaygroundSample}
         />
       </div>
+
+      <CampaignDriftChecker />
 
       {/* ── 4 · Guided demo checklist ──────────────────── */}
       <DemoChecklist />
