@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { AppShell } from '@/components/veriloom/shell'
+import { Button } from '@/components/ui/button'
 import { DashboardView } from '@/components/veriloom/dashboard'
 import { VaultView } from '@/components/veriloom/vault'
 import { AuditStudioView } from '@/components/veriloom/audit-studio'
@@ -19,12 +20,16 @@ import { AnalyticsView } from '@/components/veriloom/analytics'
 import { CertificateView } from '@/components/veriloom/certificate'
 
 export default function Home() {
-  const { view, data } = useApp()
+  const { view, data, loading, refreshError, refresh } = useApp()
 
   return (
     <AppShell>
       {data === null ? (
-        <BootScreen />
+        <BootScreen
+          loading={loading}
+          error={refreshError}
+          onRetry={() => void refresh()}
+        />
       ) : (
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -61,9 +66,17 @@ function RenderView({ view }: { view: string }) {
   }
 }
 
-function BootScreen() {
+function BootScreen({
+  loading,
+  error,
+  onRetry,
+}: {
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
   return (
-    <div className="flex h-[70vh] flex-col items-center justify-center">
+    <div className="flex min-h-[70vh] flex-col items-center justify-center px-4 text-center">
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -72,19 +85,30 @@ function BootScreen() {
       >
         <ShieldCheck className="h-6 w-6 text-cream" />
       </motion.div>
-      <p className="mt-4 animate-pulse text-sm font-semibold text-faint">
-        Booting the Living Brand Vault…
+      <p className="mt-4 text-sm font-semibold text-ink">
+        {error ? 'Could not connect to your workspace' : 'Connecting to the Living Brand Vault…'}
       </p>
-      <div className="mt-3 flex gap-1.5" aria-hidden>
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="h-1.5 w-1.5 rounded-full bg-terra-400"
-            animate={{ opacity: [0.25, 1, 0.25] }}
-            transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
-          />
-        ))}
-      </div>
+      {error ? (
+        <>
+          <p role="alert" className="mt-2 max-w-lg text-sm text-clay-700">
+            {error}
+          </p>
+          <Button className="mt-4" onClick={onRetry} disabled={loading}>
+            {loading ? 'Retrying…' : 'Retry connection'}
+          </Button>
+        </>
+      ) : (
+        <div className="mt-3 flex gap-1.5" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="h-1.5 w-1.5 rounded-full bg-terra-400"
+              animate={{ opacity: [0.25, 1, 0.25] }}
+              transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

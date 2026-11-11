@@ -50,7 +50,7 @@ export function Logo() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
-  const { view, setView, role, userName, setIdentity, setAccountsDialogOpen, data, refresh, loading } = useApp()
+  const { view, setView, role, userName, setIdentity, setAccountsDialogOpen, data, refresh, loading, refreshError } = useApp()
 
   useEffect(() => {
     if (!data) void refresh()
@@ -222,6 +222,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* scrollable content — per-view motion handled in page.tsx */}
         <main className="flex-1 overflow-y-auto vl-scroll">
           <div className="mx-auto w-full max-w-[1380px] px-4 py-6 sm:px-6 lg:px-8 print:max-w-none print:px-0 print:py-0">
+            {refreshError && (
+              <div
+                role="alert"
+                className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-clay-200 bg-clay-50 px-4 py-3"
+              >
+                <p className="min-w-0 text-sm text-clay-800">
+                  {refreshError} You are viewing the last available data.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void refresh()}
+                  disabled={loading}
+                >
+                  {loading ? 'Retrying…' : 'Retry sync'}
+                </Button>
+              </div>
+            )}
             {children}
           </div>
         </main>

@@ -24,6 +24,7 @@ export type View =
 
 export interface EventDTO {
   id: string
+  draftId: string | null
   actor: string
   action: string
   details: Record<string, unknown>
@@ -48,6 +49,7 @@ interface AppState {
   autoAuditId: string | null // freshly created draft → Audit Studio auto-runs the engine
   data: BootstrapData | null
   loading: boolean
+  refreshError: string | null
   setView: (v: View) => void
   setRole: (r: Role) => void
   setIdentity: (r: Role, name?: string) => void
@@ -60,48 +62,73 @@ interface AppState {
 
 export const useApp = create<AppState>()(
   persist(
-    (set) => ({
-      view: 'dashboard',
-      role: 'creator',
-      userName: 'Signed-in user',
-      accountsDialogOpen: false,
-      selectedDraftId: null,
-      autoAuditId: null,
-      data: null,
-      loading: false,
-      setView: (v) => set({ view: v }),
-      setRole: (r) => set({ role: r }),
-      setIdentity: (r, name) =>
-        set((s) => ({ role: r, userName: name?.trim() ? name.trim() : s.userName })),
-      setAccountsDialogOpen: (open) => set({ accountsDialogOpen: open }),
-      selectDraft: (id, view) =>
-        set((s) => ({ selectedDraftId: id, view: view ?? s.view })),
-      setAutoAudit: (id) => set({ autoAuditId: id }),
-      setData: (d) => set({ data: d }),
-      refresh: async () => {
-        set({ loading: true })
-        try {
-          const res = await fetch('/api/bootstrap', { cache: 'no-store' })
-          if (res.status === 401) {
-            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-              const { signOut } = await import('next-auth/react')
-              await signOut({ callbackUrl: '/login?reason=expired' })
+    (set) => {
+      let refreshInFlight: Promise<void> | null = null
+
+      return {
+        view: 'dashboard',
+        role: 'creator',
+        userName: 'Signed-in user',
+        accountsDialogOpen: false,
+        selectedDraftId: null,
+        autoAuditId: null,
+        data: null,
+        loading: false,
+        refreshError: null,
+        setView: (v) => set({ view: v }),
+        setRole: (r) => set({ role: r }),
+        setIdentity: (r, name) =>
+          set((s) => ({ role: r, userName: name?.trim() ? name.trim() : s.userName })),
+        setAccountsDialogOpen: (open) => set({ accountsDialogOpen: open }),
+        selectDraft: (id, view) =>
+          set((s) => ({ selectedDraftId: id, view: view ?? s.view })),
+        setAutoAudit: (id) => set({ autoAuditId: id }),
+        setData: (d) => set({ data: d }),
+        refresh: () => {
+          if (refreshInFlight) return refreshInFlight
+
+          const request = (async () => {
+            set({ loading: true })
+            try {
+              const res = await fetch('/api/bootstrap', {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(20_000),
+              })
+              if (res.status === 401) {
+                if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                  const { signOut } = await import('next-auth/react')
+                  await signOut({ callbackUrl: '/login?reason=expired' })
+                }
+                return
+              }
+              if (!res.ok) {
+                throw new Error(`Workspace sync failed (HTTP ${res.status}).`)
+              }
+
+              const data = (await res.json()) as BootstrapData
+              set((s) => ({
+                data,
+                role: data.me?.role ?? s.role,
+                userName: data.me?.name ?? s.userName,
+                refreshError: null,
+              }))
+            } catch (error) {
+              set({
+                refreshError:
+                  error instanceof Error ? error.message : 'Workspace sync failed unexpectedly.',
+              })
+            } finally {
+              set({ loading: false })
             }
-            return
-          }
-          if (res.ok) {
-            const data = (await res.json()) as BootstrapData
-            set((s) => ({
-              data,
-              role: data.me?.role ?? s.role,
-              userName: data.me?.name ?? s.userName,
-            }))
-          }
-        } finally {
-          set({ loading: false })
-        }
-      },
-    }),
+          })()
+
+          refreshInFlight = request
+          return request.finally(() => {
+            if (refreshInFlight === request) refreshInFlight = null
+          })
+        },
+      }
+    },
     {
       name: 'veriloom-session',
       partialize: (s) => ({ view: s.view, selectedDraftId: s.selectedDraftId }),

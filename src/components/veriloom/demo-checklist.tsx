@@ -7,6 +7,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Check, Trophy } from 'lucide-react'
 import { useApp } from '@/lib/store'
+import { auditHasEngineErrors, type DraftDTO } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -18,11 +19,11 @@ interface DemoStep {
   action: () => void
 }
 
-const isRemediated = (status: string, version: number) =>
-  status === 'REMEDIATED' || status === 'IN_REVIEW' || status === 'APPROVED' || version >= 2
+const isRemediated = (status: DraftDTO['status']) =>
+  status === 'REMEDIATED' || status === 'IN_REVIEW' || status === 'APPROVED'
 
 export function DemoChecklist() {
-  const { data, setView, selectDraft, role } = useApp()
+  const { data, setView, selectDraft, role, selectedDraftId } = useApp()
 
   // ── Skeleton while bootstrapping ─────────────────────
   if (data === null) {
@@ -41,28 +42,33 @@ export function DemoChecklist() {
   }
 
   const drafts = data.drafts
-  const auditDone = Object.keys(data.audits).length > 0
-  const remediationDone = drafts.some((d) => isRemediated(d.status, d.version))
-  const approvalDone = drafts.some((d) => d.status === 'APPROVED')
-  const certDone = data.events.some((e) => e.action === 'CERT_ISSUED')
-
-  // Draft pickers for each jump action
-  const auditTarget =
-    drafts.find((d) => d.kind === 'text' && d.status !== 'APPROVED') ??
-    drafts.find((d) => d.status !== 'APPROVED') ??
+  const journeyDraft =
+    drafts.find((draft) => draft.id === selectedDraftId) ??
+    drafts.find((draft) => draft.status !== 'APPROVED') ??
     drafts[0]
-  const remediationTarget =
-    drafts.find((d) => isRemediated(d.status, d.version)) ?? drafts[0]
-  const approvedDraft = drafts.find((d) => d.status === 'APPROVED')
+  const journeyAudit = journeyDraft ? data.audits[journeyDraft.id] : undefined
+  const auditDone = Boolean(
+    journeyAudit && !auditHasEngineErrors(journeyAudit.pillars)
+  )
+  const remediationDone = journeyDraft ? isRemediated(journeyDraft.status) : false
+  const approvalDone = journeyDraft?.status === 'APPROVED'
+  const certDone = Boolean(
+    journeyDraft &&
+      data.events.some(
+        (event) => event.action === 'CERT_ISSUED' && event.draftId === journeyDraft.id
+      )
+  )
 
   const steps: DemoStep[] = [
     {
       id: 'audit',
       title: 'Run a 6-pillar audit',
-      hint: 'Open a draft and hit Run audit — all six checks fire in parallel.',
+      hint: journeyDraft
+        ? 'Run the six checks on this draft; incomplete checks stay open until recovered.'
+        : 'Create a draft in Audit Studio to start the guided flow.',
       done: auditDone,
       action: () => {
-        if (auditTarget) selectDraft(auditTarget.id, 'audit')
+        if (journeyDraft) selectDraft(journeyDraft.id, 'audit')
         else setView('audit')
       },
     },
@@ -70,12 +76,14 @@ export function DemoChecklist() {
       id: 'remediation',
       title: 'Fix findings in Remediation',
       hint:
-        role === 'creator'
-          ? 'Accept or override each cited finding before creating a remediated version.'
-          : 'Requires an Author account — inspect the findings queue and cited clauses.',
+        !journeyDraft
+          ? 'Create a draft in Audit Studio before resolving its findings.'
+          : role === 'creator'
+            ? 'Accept or override each cited finding on this draft before creating a remediated version.'
+            : 'Requires an Author account — inspect this draft’s findings and cited clauses.',
       done: remediationDone,
       action: () => {
-        if (remediationTarget) selectDraft(remediationTarget.id, 'remediation')
+        if (journeyDraft) selectDraft(journeyDraft.id, 'remediation')
         else setView('remediation')
       },
     },
@@ -83,21 +91,30 @@ export function DemoChecklist() {
       id: 'review',
       title: 'Send for review & approve',
       hint:
-        role === 'reviewer'
-          ? 'You hold Approver sign-off — approve a draft once it reaches In Review.'
-          : role === 'manager'
-            ? 'You hold Reviewer access — inspect version diffs and request changes if needed.'
-            : 'Separate Author, Reviewer, and Approver accounts verify submission, changes, and final sign-off.',
+        !journeyDraft
+          ? 'Create and audit a draft before sending it for review.'
+          : role === 'reviewer'
+            ? 'You hold Approver sign-off — approve this draft once it reaches In Review.'
+            : role === 'manager'
+              ? 'You hold Reviewer access — inspect this draft’s version diffs and request changes if needed.'
+              : 'Use separate Author, Reviewer, and Approver accounts to review this draft and sign it off.',
       done: approvalDone,
-      action: () => setView('review'),
+      action: () => {
+        if (journeyDraft) selectDraft(journeyDraft.id, 'review')
+        else setView('review')
+      },
     },
     {
       id: 'certificate',
       title: 'Claim the compliance certificate',
-      hint: 'Open the tamper-proof certificate for the approved draft.',
+      hint: journeyDraft
+        ? 'Open the tamper-evident certificate after this draft is approved.'
+        : 'Create, audit, and approve a draft before issuing its certificate.',
       done: certDone,
       action: () => {
-        if (approvedDraft) selectDraft(approvedDraft.id, 'certificate')
+        if (journeyDraft) {
+          selectDraft(journeyDraft.id, journeyDraft.status === 'APPROVED' ? 'certificate' : 'review')
+        }
         else setView('certificate')
       },
     },
@@ -116,8 +133,9 @@ export function DemoChecklist() {
             The 60-second demo
           </h2>
           <p className="mt-0.5 text-sm text-ink-soft">
-            Follow the golden path judges walk — steps check themselves off as
-            you go.
+            {journeyDraft
+              ? `Tracking “${journeyDraft.title}” through the golden path. Steps only complete when this draft reaches each milestone.`
+              : 'Create a draft first, then follow it through audit, remediation, review, and approval.'}
           </p>
         </div>
         <span className="shrink-0 text-sm font-bold tabular-nums text-ink">

@@ -46,15 +46,17 @@ const VIEW_LABEL: Record<View, string> = {
 const fixDone = (d: DraftDTO) =>
   d.status === 'REMEDIATED' ||
   d.status === 'IN_REVIEW' ||
-  d.status === 'APPROVED' ||
-  d.status === 'CHANGES_REQUESTED' ||
-  d.version >= 2
+  d.status === 'APPROVED'
 
 const reviewDone = (d: DraftDTO) =>
   d.status === 'IN_REVIEW' || d.status === 'CHANGES_REQUESTED' || d.status === 'APPROVED'
 
 /** Where should this draft be worked on right now? */
-function routeFor(d: DraftDTO): View {
+function routeFor(d: DraftDTO, audit?: AuditResult): View {
+  if (d.status !== 'APPROVED' && audit && auditHasEngineErrors(audit.pillars)) {
+    return 'audit'
+  }
+
   switch (d.status) {
     case 'APPROVED':
       return 'certificate'
@@ -489,7 +491,7 @@ const RAIL_STAGES = [
 ] as const
 
 function PipelineBoard() {
-  const { data } = useApp()
+  const { data, setView } = useApp()
   const drafts = data?.drafts ?? []
 
   return (
@@ -500,22 +502,29 @@ function PipelineBoard() {
         desc="Every draft rides the same rail — Draft → Audit → Fix → Review → Live. Open one and you land in the exact module where its work continues."
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {drafts.length === 0
-          ? [0, 1, 2].map((i) => (
-              <div
-                key={`sk-${i}`}
-                className="h-36 animate-pulse rounded-xl border border-line/60 bg-parchment/60"
-              />
-            ))
-          : drafts.map((d, i) => (
-              <PipelineCard
-                key={d.id}
-                draft={d}
-                audit={data?.audits[d.id]}
-                vault={data?.vault ?? []}
-                index={i}
-              />
-            ))}
+        {drafts.length === 0 ? (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-line bg-paper p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">No drafts yet</h3>
+              <p className="mt-1 text-sm text-ink-soft">
+                Create a draft to start the audit, remediation, and approval workflow.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setView('audit')}>
+              Create a draft <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          drafts.map((d, i) => (
+            <PipelineCard
+              key={d.id}
+              draft={d}
+              audit={data?.audits[d.id]}
+              vault={data?.vault ?? []}
+              index={i}
+            />
+          ))
+        )}
       </div>
     </section>
   )
@@ -542,7 +551,7 @@ function PipelineCard({
       s.id === 'draft'
         ? true
         : s.id === 'audit'
-          ? !!audit
+          ? !!audit && !incomplete
           : s.id === 'fix'
             ? fixDone(draft)
             : s.id === 'review'
@@ -554,7 +563,7 @@ function PipelineCard({
   const activeIdx = allDone ? -1 : doneCount
   const fillPct = allDone ? 100 : ((doneCount - 1) / (stages.length - 1)) * 100
   const nextStage = allDone ? null : stages[activeIdx]
-  const route = routeFor(draft)
+  const route = routeFor(draft, audit)
   const open = () => selectDraft(draft.id, route)
 
   const approved = draft.status === 'APPROVED'

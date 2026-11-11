@@ -25,32 +25,34 @@ The AI proposes and explains; deterministic code and human review remain in the 
 
 ## Run locally
 
-Requirements: [Bun](https://bun.sh/), Python 3, PostgreSQL, a Google AI Studio API key, and a `NEXTAUTH_SECRET`. [Neon](https://neon.tech/) is a hosted PostgreSQL option for Vercel. pgAdmin is a database client, not a hosted database.
+Requirements: [Git](https://git-scm.com/), [Bun](https://bun.sh/), Python 3, PostgreSQL, a Google AI Studio API key, and a `NEXTAUTH_SECRET`. You can use local PostgreSQL or a hosted provider such as [Neon](https://neon.tech/); pgAdmin is a database client, not a database server.
 
-1. Install dependencies and apply the database migration:
+1. Clone the repository and install dependencies:
 
    ```sh
+   git clone https://github.com/Aaryandaksh007/Veriloomx.git
+   cd Veriloomx
    bun install
-   bun run db:deploy
    ```
 
-2. Create `.env.local` in the project root:
+2. Copy `.env.example` to `.env` in the project root (PowerShell users can run `Copy-Item .env.example .env`) and replace its placeholder values:
 
    ```env
    DATABASE_URL=postgresql://USER:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require
    DIRECT_URL=postgresql://USER:PASSWORD@HOST.REGION.aws.neon.tech/DATABASE?sslmode=require
-   NEXTAUTH_SECRET=generate-a-long-random-secret
-   INITIAL_ADMIN_SETUP_KEY=generate-a-separate-one-time-setup-secret
+   NEXTAUTH_SECRET=<unique-random-secret>
+   INITIAL_ADMIN_SETUP_KEY=<different-random-secret>
    GEMINI_API_KEY=your-google-ai-studio-key
    GEMINI_MODEL=gemini-3.8-flash
    GEMINI_VISION_MODEL=gemini-3.8-flash
    ```
 
-   Use the provider's pooled connection string for `DATABASE_URL` and its direct connection string for `DIRECT_URL`. Generate unique random `NEXTAUTH_SECRET` and `INITIAL_ADMIN_SETUP_KEY` values for each environment. The setup key is only used to bootstrap the first account; remove it from the deployment environment after setup. Keep all secrets and URLs out of Git; `.env.local` is ignored.
+   The example URLs are templates: replace them with your provider's pooled (`DATABASE_URL`) and direct (`DIRECT_URL`) PostgreSQL URLs; for local PostgreSQL, both can use the same URL. Generate two different random values for `NEXTAUTH_SECRET` and `INITIAL_ADMIN_SETUP_KEY` (for example, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` twice). URL-encode special characters in database credentials. `.env` is ignored by Git; never commit secrets.
 
-3. Start the app:
+3. Apply the migrations and start the app:
 
    ```sh
+   bun run db:deploy
    bun run dev
    ```
 
@@ -80,7 +82,15 @@ bun run build
 E2E_DATABASE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require bun run test:e2e
 ```
 
-On PowerShell, set `$env:E2E_DATABASE_URL` before running the test. The runner creates a uniquely named temporary PostgreSQL schema, starts a production server, and removes that schema afterward. Never point it at production data.
+On PowerShell, set `E2E_DATABASE_URL` to a **disposable PostgreSQL database** and run:
+
+```powershell
+$env:E2E_DATABASE_URL = 'postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require'
+bun run test:e2e
+Remove-Item Env:E2E_DATABASE_URL
+```
+
+The runner creates a uniquely named temporary schema, starts a production server, and removes that schema afterward. Never point it at production data; the test also calls Gemini and can consume API quota.
 
 ## Quality checks and production build
 
@@ -99,6 +109,14 @@ The production build type-checks the app. Vercel serves the app through its nati
 - Credentials and server-enforced role checks are implemented, but there is no password-reset, MFA, invite flow, or rate limiting. Use unique strong passwords and an administrator-controlled deployment; do not treat this hackathon prototype as a hardened identity service.
 - Gemini calls send the redacted text (or the uploaded image for visual analysis) to Google's API. Review your provider's data terms before using real customer content.
 - Certificates provide an integrity hash for the recorded demo audit; they are not a legal or regulatory certification.
+
+## Roadmap
+
+1. **Production identity controls:** add account recovery, MFA, invitations, and server-side rate limits before onboarding an external team.
+2. **Operational review workflow:** add configurable reviewer assignment and notifications so teams can manage approvals without polling the dashboard.
+3. **Governance operations:** add exportable audit evidence and configurable retention so administrators can archive decisions and certificates.
+
+These are planned follow-ups, not capabilities currently included in the prototype.
 
 ## API overview
 

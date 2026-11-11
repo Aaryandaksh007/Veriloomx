@@ -121,6 +121,7 @@ export async function GET() {
     teamSummary,
     events: events.map((e) => ({
       id: e.id,
+      draftId: e.draftId,
       actor: e.actor,
       action: e.action,
       details: e.details ? JSON.parse(e.details) : {},
