@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { serialiseAudit } from '@/lib/audit/engine'
 import { auditHasEngineErrors, type CertificateData, type Finding, type FindingActionDTO, type PillarSummary } from '@/lib/types'
 import { currentUser } from '@/lib/authorization'
+import { selectGoverningAudit } from '@/lib/governance'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
   const draft = await db.draft.findUnique({
     where: { id: draftId },
-    include: { versions: true },
+    include: { versions: { orderBy: { version: 'desc' } } },
   })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   if (draft.status !== 'APPROVED') {
@@ -32,18 +33,58 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     )
   }
 
-  // latest audit = the one the approval decision was based on
-  const audit = await db.auditRun.findFirst({
-    where: { draftId },
-    orderBy: { createdAt: 'desc' },
-    include: { actions: true },
-  })
+  const [approvedEvent, audits, managerComment, statusEvents] = await Promise.all([
+    db.eventLog.findFirst({
+      where: { draftId, action: 'CERT_ISSUED' },
+      orderBy: { createdAt: 'desc' },
+    }),
+    db.auditRun.findMany({
+      where: { draftId },
+      orderBy: { createdAt: 'desc' },
+      include: { actions: true },
+    }),
+    db.comment.findFirst({
+      where: { draftId, role: 'manager' },
+      orderBy: { createdAt: 'desc' },
+      select: { author: true },
+    }),
+    db.eventLog.findMany({
+      where: { draftId, action: 'STATUS_CHANGE' },
+      orderBy: { createdAt: 'desc' },
+      select: { actor: true, details: true },
+    }),
+  ])
+
+  let certifiedAuditId: string | null = null
+  if (approvedEvent?.details) {
+    try {
+      const parsed = JSON.parse(approvedEvent.details) as { auditId?: unknown }
+      if (typeof parsed.auditId === 'string') certifiedAuditId = parsed.auditId
+    } catch {
+      certifiedAuditId = null
+    }
+  }
+
+  const audit = selectGoverningAudit(draft, audits, draft.versions, certifiedAuditId)
   if (!audit) return NextResponse.json({ error: 'Audit not found' }, { status: 404 })
   if (auditHasEngineErrors(JSON.parse(audit.pillarSummaries) as PillarSummary[])) {
     return NextResponse.json(
       { error: 'This certificate cannot be issued because one or more audit checks failed.' },
       { status: 409 }
     )
+  }
+
+  let reviewerFromEvents: string | null = null
+  let approverFromEvents: string | null = null
+  for (const ev of statusEvents) {
+    if (!ev.details) continue
+    try {
+      const d = JSON.parse(ev.details) as { to?: string }
+      if (!reviewerFromEvents && d.to === 'CHANGES_REQUESTED') reviewerFromEvents = ev.actor
+      if (!approverFromEvents && d.to === 'APPROVED') approverFromEvents = ev.actor
+    } catch {
+      // ignore malformed event details
+    }
   }
 
   const findings = JSON.parse(audit.findings) as Finding[]
@@ -62,11 +103,6 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       createdAt: a.createdAt.toISOString(),
       finding: findings.find((f) => f.key === a.findingKey) ?? null,
     }))
-
-  const approvedEvent = await db.eventLog.findFirst({
-    where: { draftId, action: 'CERT_ISSUED' },
-    orderBy: { createdAt: 'desc' },
-  })
 
   // ── tamper-evident integrity hash ─────────────────────────
   const canonical = JSON.stringify({
@@ -109,6 +145,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     },
     audit: auditResult,
     overrides,
+    signers: {
+      author: draft.creator,
+      reviewer: reviewerFromEvents ?? managerComment?.author ?? null,
+      approver: approvedEvent?.actor ?? approverFromEvents ?? null,
+    },
     hash,
     issuedAt: (approvedEvent?.createdAt ?? audit.createdAt).toISOString(),
     certificateId,

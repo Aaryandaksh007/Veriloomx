@@ -34,18 +34,23 @@ export interface BootstrapData {
   vault: VaultItemDTO[]
   drafts: DraftDTO[]
   audits: Record<string, AuditResult>
+  teamSummary?: { totalUsers: number; roleCounts: Record<Role, number> }
   events: EventDTO[]
 }
 
 interface AppState {
   view: View
   role: Role
+  userName: string
+  accountsDialogOpen: boolean
   selectedDraftId: string | null
   autoAuditId: string | null // freshly created draft → Audit Studio auto-runs the engine
   data: BootstrapData | null
   loading: boolean
   setView: (v: View) => void
   setRole: (r: Role) => void
+  setIdentity: (r: Role, name?: string) => void
+  setAccountsDialogOpen: (open: boolean) => void
   selectDraft: (id: string | null, view?: View) => void
   setAutoAudit: (id: string | null) => void
   setData: (d: BootstrapData) => void
@@ -54,15 +59,20 @@ interface AppState {
 
 export const useApp = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       view: 'dashboard',
       role: 'creator',
+      userName: 'Signed-in user',
+      accountsDialogOpen: false,
       selectedDraftId: null,
       autoAuditId: null,
       data: null,
       loading: false,
       setView: (v) => set({ view: v }),
       setRole: (r) => set({ role: r }),
+      setIdentity: (r, name) =>
+        set((s) => ({ role: r, userName: name?.trim() ? name.trim() : s.userName })),
+      setAccountsDialogOpen: (open) => set({ accountsDialogOpen: open }),
       selectDraft: (id, view) =>
         set((s) => ({ selectedDraftId: id, view: view ?? s.view })),
       setAutoAudit: (id) => set({ autoAuditId: id }),
@@ -71,6 +81,12 @@ export const useApp = create<AppState>()(
         set({ loading: true })
         try {
           const res = await fetch('/api/bootstrap', { cache: 'no-store' })
+          if (res.status === 401) {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+              window.location.assign('/login')
+            }
+            return
+          }
           if (res.ok) {
             const data = (await res.json()) as BootstrapData
             set({ data })
@@ -93,8 +109,8 @@ export const roleIdentity = (role: Role, name = 'Signed-in user') => ({
 })
 
 const ROLE_LABELS: Record<Role, string> = {
-  creator: 'Creator',
-  manager: 'Brand Manager',
-  reviewer: 'Authorised Reviewer',
+  creator: 'Author',
+  manager: 'Reviewer',
+  reviewer: 'Approver',
   admin: 'Administrator',
 }

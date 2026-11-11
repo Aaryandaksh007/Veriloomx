@@ -172,8 +172,8 @@ export const STATUS_META: Record<
   DRAFT: { label: 'Draft', desc: 'Awaiting audit', tone: 'bg-stone-100 text-stone-600 border-stone-300' },
   AUDITED: { label: 'Audited', desc: '6-pillar audit complete — remediation pending', tone: 'bg-ochre-50 text-ochre-700 border-ochre-200' },
   REMEDIATED: { label: 'Remediated', desc: 'Fixes applied — ready for review', tone: 'bg-terra-50 text-terra-700 border-terra-200' },
-  IN_REVIEW: { label: 'In Review', desc: 'With Manager & Authorised Reviewer', tone: 'bg-stone-100 text-stone-700 border-stone-300' },
-  CHANGES_REQUESTED: { label: 'Changes Requested', desc: 'Returned to creator by Manager', tone: 'bg-clay-50 text-clay-700 border-clay-200' },
+  IN_REVIEW: { label: 'In Review', desc: 'With Reviewer & Approver', tone: 'bg-stone-100 text-stone-700 border-stone-300' },
+  CHANGES_REQUESTED: { label: 'Changes Requested', desc: 'Returned to Author by Reviewer', tone: 'bg-clay-50 text-clay-700 border-clay-200' },
   APPROVED: { label: 'Approved', desc: 'Signed off — certificate issued', tone: 'bg-olive-50 text-olive-700 border-olive-200' },
 }
 
@@ -255,10 +255,17 @@ export interface DraftVersionDTO {
   createdAt: string
 }
 
+export interface CertificateSigners {
+  author: string
+  reviewer: string | null
+  approver: string | null
+}
+
 export interface CertificateData {
   draft: DraftDTO
   audit: AuditResult
   overrides: (FindingActionDTO & { finding: Finding | null })[]
+  signers: CertificateSigners
   hash: string
   issuedAt: string
   certificateId: string

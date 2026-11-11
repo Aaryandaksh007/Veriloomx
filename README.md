@@ -69,7 +69,7 @@ Import the GitHub repository into Vercel and add these environment variables for
 
 Vercel runs the checked-in Prisma migrations during each build. Do not use a local-only PostgreSQL instance or expose its port to the internet for deployment. pgAdmin can connect to Neon for administration, but it does not host the database. Keep database and Gemini secrets in Vercel's project environment settings, not in source files.
 
-## path
+## Golden walkthrough
 
 Create accounts for each workflow role, then sign in separately to demonstrate the full journey: author drafts and audits content, reviewer requests changes or sends it forward, and approver signs off. Inspect an incomplete audit's retry state, compare Vault rule versions, remediate a complete audit, and open the certificate.
 
@@ -96,7 +96,7 @@ The production build type-checks the app. Vercel serves the app through its nati
 
 ## Current prototype boundaries
 
-- Credentials and server-enforced role checks are implemented, but there is no password-reset, MFA, invite flow, rate limiting, or account-deactivation UI. Use unique strong passwords and an administrator-controlled deployment; do not treat this hackathon prototype as a hardened identity service.
+- Credentials and server-enforced role checks are implemented, but there is no password-reset, MFA, invite flow, or rate limiting. Use unique strong passwords and an administrator-controlled deployment; do not treat this hackathon prototype as a hardened identity service.
 - Gemini calls send the redacted text (or the uploaded image for visual analysis) to Google's API. Review your provider's data terms before using real customer content.
 - Certificates provide an integrity hash for the recorded demo audit; they are not a legal or regulatory certification.
 
@@ -108,10 +108,10 @@ All API routes require a signed-in session except NextAuth endpoints and the one
 |---|---|---|
 | `/api/auth/[...nextauth]` | Credentials sign-in/out | Public |
 | `/api/setup` | Create the first administrator only | Public until initialized |
-| `/api/users` | List and provision accounts | Administrator |
+| `/api/users` and `/api/users/:id` | List, provision, update roles, and deactivate accounts | Administrator |
 | `/api/drafts` and `/api/drafts/:id` | Create and manage draft versions | Author |
-| `/api/audit` | Run or review audits, including saved versions | Author to run; any signed-in role to view |
+| `/api/audit` | Run audits, retry failed checks (`retryAuditId`), or review version history | Author to run; any signed-in role to view |
 | `/api/findings/action`, `/api/remediate` | Resolve findings and create a remediated version | Author |
-| `/api/vault` and `/api/vault/:id` | Read rules, edit rules, and inspect rule history | Read: signed-in; write: administrator |
+| `/api/vault` and `/api/vault/:id` | Read rules, edit or restore rule versions, and inspect rule history | Read: signed-in; write: administrator |
 | `/api/review` | Submit, request changes, and approve | Role-specific |
 | `/api/certificate/:draftId` | Retrieve the approval certificate | Signed-in |

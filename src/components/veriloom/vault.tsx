@@ -16,9 +16,13 @@ import {
   Image as ImageIcon,
   Lock,
   Scale,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import type { VaultItemDTO } from '@/lib/types'
+import { diffVaultSnapshot } from '@/lib/vault-lineage'
+import { wordDiff } from '@/lib/diff'
 import { ClauseBadge, HexSwatch, timeAgo, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,12 +74,36 @@ const TYPE_META: Record<
 type TabKey = 'ALL' | VaultItemDTO['type']
 
 export function VaultView() {
-  const { data, refresh, role } = useApp()
+  const { data, refresh, role, setView } = useApp()
   const [tab, setTab] = useState<TabKey>('ALL')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<VaultItemDTO | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<VaultItemDTO | null>(null)
+
+  const driftSummary = useMemo(() => {
+    const vault = data?.vault ?? []
+    const drafts = (data?.drafts ?? []).filter((d) => d.status !== 'APPROVED')
+    const affectedByClause = new Map<string, number>()
+    let staleDraftCount = 0
+    for (const draft of drafts) {
+      const audit = data?.audits[draft.id]
+      if (!audit) continue
+      const diff = diffVaultSnapshot(audit.vaultSnapshot, vault)
+      if (!diff.isStale) continue
+      staleDraftCount++
+      for (const u of diff.updated) {
+        affectedByClause.set(u.clauseId, (affectedByClause.get(u.clauseId) ?? 0) + 1)
+      }
+      for (const a of diff.added) {
+        affectedByClause.set(a.clauseId, (affectedByClause.get(a.clauseId) ?? 0) + 1)
+      }
+      for (const r of diff.removed) {
+        affectedByClause.set(r.clauseId, (affectedByClause.get(r.clauseId) ?? 0) + 1)
+      }
+    }
+    return { staleDraftCount, affectedByClause }
+  }, [data])
 
   const items = useMemo(() => {
     let list = data?.vault ?? []
@@ -138,11 +166,32 @@ export function VaultView() {
         </div>
       </div>
 
+      {driftSummary.staleDraftCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ochre-300 bg-ochre-50/70 px-4 py-3">
+          <p className="flex items-center gap-2 text-xs text-ochre-900">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-ochre-600" />
+            <span>
+              <strong>Policy drift detected:</strong> {driftSummary.staleDraftCount} in-flight draft
+              {driftSummary.staleDraftCount === 1 ? ' was' : 's were'} audited against older rule versions.
+            </span>
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 border-ochre-300 bg-paper text-xs text-ochre-800 hover:bg-ochre-100"
+            onClick={() => setView('audit')}
+          >
+            Inspect &amp; rerun in Audit Studio
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => (
           <VaultCard
             key={item.id}
             item={item}
+            affectedDraftCount={driftSummary.affectedByClause.get(item.clauseId) ?? 0}
             onEdit={() => setEditing(item)}
             onDelete={() => setDeleting(item)}
           />
@@ -200,10 +249,12 @@ export function VaultView() {
 
 function VaultCard({
   item,
+  affectedDraftCount,
   onEdit,
   onDelete,
 }: {
   item: VaultItemDTO
+  affectedDraftCount: number
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -213,15 +264,32 @@ function VaultCard({
   const [busy, setBusy] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [restoringVer, setRestoringVer] = useState<number | null>(null)
   const [history, setHistory] = useState<{
     version: number
     title: string
     content: string
+    extra: Record<string, unknown> | null
     active: boolean
     editedBy: string
     editNote: string | null
     createdAt: string
   }[]>([])
+
+  const loadHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const response = await fetch(`/api/vault/${item.id}`, { cache: 'no-store' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error ?? 'Could not load rule history.')
+      setHistory(body.history)
+      setHistoryOpen(true)
+    } catch (error) {
+      toast({ title: 'History unavailable', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   return (
     <div
@@ -246,24 +314,12 @@ function VaultCard({
         <div className="flex shrink-0 items-center gap-1">
           <button
             disabled={historyLoading}
-            onClick={async () => {
-              setHistoryLoading(true)
-              try {
-                const response = await fetch(`/api/vault/${item.id}`, { cache: 'no-store' })
-                const body = await response.json()
-                if (!response.ok) throw new Error(body.error ?? 'Could not load rule history.')
-                setHistory(body.history)
-                setHistoryOpen(true)
-              } catch (error) {
-                toast({ title: 'History unavailable', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
-              } finally {
-                setHistoryLoading(false)
-              }
-            }}
-            className="rounded-md p-1.5 text-faint hover:bg-parchment hover:text-ink"
-            title="View rule history"
+            onClick={() => void loadHistory()}
+            className="inline-flex items-center gap-1 rounded-md border border-line bg-parchment px-2 py-1 text-[10.5px] font-semibold text-ink-soft hover:border-stone-300 hover:text-ink"
+            title="View version history & diffs"
           >
-            <CalendarClock className="h-3.5 w-3.5" />
+            <CalendarClock className="h-3 w-3" />
+            v{item.ruleVer} · History
           </button>
           {role === 'admin' && (
             <>
@@ -305,53 +361,161 @@ function VaultCard({
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-2.5">
-        <span className="text-[10.5px] text-faint">
-          Updated {timeAgo(item.updatedAt)} · v{item.ruleVer}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10.5px] font-medium text-faint">active</span>
-          <Switch
-            checked={item.active}
-            disabled={busy || role !== 'admin'}
-            onCheckedChange={async (v) => {
-              setBusy(true)
-              try {
-                const response = await fetch(`/api/vault/${item.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ active: v }),
-                })
-                if (!response.ok) throw new Error((await response.json()).error ?? 'Could not update rule.')
-                await refresh()
-              } catch (error) {
-                toast({ title: 'Rule update failed', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
-              } finally {
-                setBusy(false)
-              }
-            }}
-          />
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-stone-200 pt-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-[10.5px] text-faint">
+            Updated {timeAgo(item.updatedAt)} · v{item.ruleVer}
+          </span>
+          {affectedDraftCount > 0 && (
+            <span className="rounded-full border border-ochre-300 bg-ochre-50 px-2 py-0.5 text-[10px] font-semibold text-ochre-700">
+              Impacts {affectedDraftCount} audited {affectedDraftCount === 1 ? 'draft' : 'drafts'}
+            </span>
+          )}
         </div>
+        {role === 'admin' ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10.5px] font-medium text-faint">active</span>
+            <Switch
+              checked={item.active}
+              disabled={busy}
+              onCheckedChange={async (v) => {
+                setBusy(true)
+                try {
+                  const response = await fetch(`/api/vault/${item.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active: v }),
+                  })
+                  if (!response.ok) throw new Error((await response.json()).error ?? 'Could not update rule.')
+                  await refresh()
+                } catch (error) {
+                  toast({ title: 'Rule update failed', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <span
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+              item.active
+                ? 'border-olive-200 bg-olive-50 text-olive-700'
+                : 'border-stone-300 bg-parchment text-faint'
+            )}
+          >
+            {item.active ? 'Active' : 'Archived'}
+          </span>
+        )}
         <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-xl">
+          <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{item.clauseId} — rule history</DialogTitle>
-              <DialogDescription>Audits retain the exact active version of every cited rule.</DialogDescription>
+              <DialogTitle>{item.clauseId} — rule version history</DialogTitle>
+              <DialogDescription>
+                Every rule update creates an immutable snapshot. Audits cite the exact rule version active when they ran.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               {history.map((version, index) => {
                 const prior = history[index + 1]
-                const changed = Boolean(prior && (version.content !== prior.content || version.title !== prior.title || version.active !== prior.active))
+                const changed = Boolean(
+                  prior &&
+                    (version.content !== prior.content ||
+                      version.title !== prior.title ||
+                      version.active !== prior.active ||
+                      JSON.stringify(version.extra) !== JSON.stringify(prior.extra))
+                )
+                const contentDiff = prior && version.content !== prior.content ? wordDiff(prior.content, version.content) : null
+                const extraChanged = prior && JSON.stringify(version.extra) !== JSON.stringify(prior.extra)
                 return (
-                  <section key={version.version} className="rounded-lg border border-line p-3">
-                    <div className="flex flex-wrap justify-between gap-2 text-xs">
-                      <strong>Version {version.version}{version.active ? '' : ' · archived'}</strong>
-                      <span className="text-faint">{new Date(version.createdAt).toLocaleString()} · {version.editedBy}</span>
+                  <section key={version.version} className="rounded-lg border border-line bg-paper p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <strong>Version {version.version}</strong>
+                        {version.version === item.ruleVer && (
+                          <span className="rounded-full bg-terra-50 px-2 py-0.5 text-[10px] font-bold text-terra-700">
+                            LIVE
+                          </span>
+                        )}
+                        {!version.active && (
+                          <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
+                            Archived
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-faint">{new Date(version.createdAt).toLocaleString()} · {version.editedBy}</span>
+                        {role === 'admin' && version.version !== item.ruleVer && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={restoringVer === version.version}
+                            onClick={async () => {
+                              setRestoringVer(version.version)
+                              try {
+                                const res = await fetch(`/api/vault/${item.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ restoreVersion: version.version }),
+                                })
+                                const body = await res.json()
+                                if (!res.ok) throw new Error(body.error ?? 'Could not restore rule version.')
+                                await refresh()
+                                await loadHistory()
+                                toast({
+                                  title: `${item.clauseId} restored to v${version.version}`,
+                                  description: `Recorded as new live rule version v${body.item.ruleVer}.`,
+                                })
+                              } catch (err) {
+                                toast({
+                                  title: 'Restore failed',
+                                  description: err instanceof Error ? err.message : 'Try again.',
+                                  variant: 'destructive',
+                                })
+                              } finally {
+                                setRestoringVer(null)
+                              }
+                            }}
+                          >
+                            <RotateCcw className="mr-1 h-3 w-3" />
+                            {restoringVer === version.version ? 'Restoring…' : `Restore v${version.version}`}
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    {version.editNote && <p className="mt-1 text-xs text-terra-700">{version.editNote}</p>}
-                    {changed && <p className="mt-1 text-[11px] font-semibold text-ochre-700">Changed from the prior version</p>}
+                    {version.editNote && <p className="mt-1 text-xs font-medium text-terra-700">{version.editNote}</p>}
+                    {changed && (
+                      <p className="mt-1 text-[11px] font-semibold text-ochre-700">
+                        Diff vs v{prior.version}{extraChanged ? ' (includes structured rule parameters)' : ''}
+                      </p>
+                    )}
                     <h4 className="mt-2 text-sm font-semibold text-ink">{version.title}</h4>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-ink-soft">{version.content}</p>
+                    {contentDiff ? (
+                      <p className="mt-1 whitespace-pre-wrap rounded-md bg-parchment/70 p-2.5 text-xs leading-relaxed text-ink-soft">
+                        {contentDiff.map((tok, i) =>
+                          tok.op === 'remove' ? (
+                            <del key={i} className="rounded bg-clay-100 px-0.5 text-clay-800 line-through">
+                              {tok.text}
+                            </del>
+                          ) : tok.op === 'add' ? (
+                            <ins key={i} className="rounded bg-olive-100 px-0.5 font-medium text-olive-900 no-underline">
+                              {tok.text}
+                            </ins>
+                          ) : (
+                            <span key={i}>{tok.text}</span>
+                          )
+                        )}
+                      </p>
+                    ) : (
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-ink-soft">{version.content}</p>
+                    )}
+                    {version.extra && (
+                      <p className="mt-2 rounded bg-parchment px-2 py-1 font-mono text-[10.5px] text-stone-600">
+                        Params: {JSON.stringify(version.extra)}
+                      </p>
+                    )}
                   </section>
                 )
               })}

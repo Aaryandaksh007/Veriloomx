@@ -337,7 +337,7 @@ function BlindspotCard({ rule }: { rule: RuleRow }) {
   const [suggestion, setSuggestion] = useState<{ suggestedClause: string; rationale: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [applying, setApplying] = useState(false)
-  const { refresh } = useApp()
+  const { refresh, role } = useApp()
 
   const ask = async () => {
     setBusy(true)
@@ -424,16 +424,22 @@ function BlindspotCard({ rule }: { rule: RuleRow }) {
             “{suggestion.suggestedClause}”
           </p>
           <p className="text-[10.5px] italic text-ink-soft">{suggestion.rationale}</p>
-          <div className="flex gap-1.5">
-            <Button
-              size="sm"
-              className="h-7 flex-1 bg-ochre-600 px-2 text-[11px] hover:bg-ochre-500"
-              disabled={applying}
-              onClick={apply}
-            >
-              {applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              Apply to Vault
-            </Button>
+          <div className="flex items-center gap-1.5">
+            {role === 'admin' ? (
+              <Button
+                size="sm"
+                className="h-7 flex-1 bg-ochre-600 px-2 text-[11px] hover:bg-ochre-500"
+                disabled={applying}
+                onClick={apply}
+              >
+                {applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Apply to Vault
+              </Button>
+            ) : (
+              <span className="flex-1 text-[10.5px] text-ink-soft">
+                Administrator role required to apply changes to Vault.
+              </span>
+            )}
             <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setSuggestion(null)}>
               Dismiss
             </Button>

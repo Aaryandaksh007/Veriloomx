@@ -25,13 +25,16 @@ import {
   CircleDot,
   History,
   RotateCcw,
+  AlertTriangle,
+  GitCompareArrows,
 } from 'lucide-react'
-import { useApp, roleIdentity } from '@/lib/store'
+import { useApp } from '@/lib/store'
 import { liveScan } from '@/lib/live-check'
 import { LiveTextarea, LiveStatusStrip } from './live-editor'
 import {
   auditHasEngineErrors,
   PILLAR_META,
+  ROLE_META,
   type AuditResult,
   type DraftDTO,
   type Finding,
@@ -39,14 +42,9 @@ import {
   type Pillar,
   type PillarSummary,
   type DraftVersionDTO,
+  type VaultItemDTO,
 } from '@/lib/types'
-
-interface AuditLineageEntry {
-  id: string
-  version: number
-  createdAt: string
-  vaultSnapshot: { clauseId: string; ruleVer: number }[]
-}
+import { diffVaultSnapshot, compareAudits } from '@/lib/vault-lineage'
 import { extractPaletteFromPixels } from '@/lib/palette'
 import {
   ClauseBadge,
@@ -153,7 +151,6 @@ export function AuditStudioView() {
             draft={selected}
             audit={audit ?? null}
             onAuditDone={refresh}
-            actor={roleIdentity(role).name}
           />
         )}
       </div>
@@ -168,14 +165,13 @@ function DraftPanel({
   draft,
   audit,
   onAuditDone,
-  actor,
 }: {
   draft: DraftDTO
   audit: AuditResult | null
   onAuditDone: () => Promise<void>
-  actor: string
 }) {
-  const { selectDraft, setView, data, autoAuditId, setAutoAudit } = useApp()
+  const { selectDraft, setView, data, role, userName, autoAuditId, setAutoAudit } = useApp()
+  const canAuthor = role === 'creator'
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0) // 0 idle, 1..6 pillar animation
   const [result, setResult] = useState<AuditResult | null>(audit)
@@ -183,9 +179,14 @@ function DraftPanel({
   const [altText, setAltText] = useState(draft.imageMeta?.altText ?? '')
   const [showRedacted, setShowRedacted] = useState(false)
   const [versions, setVersions] = useState<DraftVersionDTO[]>([])
-  const [auditHistory, setAuditHistory] = useState<AuditLineageEntry[]>([])
+  const [auditHistory, setAuditHistory] = useState<AuditResult[]>([])
+  const [inspectedAuditId, setInspectedAuditId] = useState<string | null>(null)
   const runToken = useRef(0)
   const autoRunDone = useRef<string | null>(null)
+
+  useEffect(() => {
+    setInspectedAuditId(null)
+  }, [draft.id])
 
   useEffect(() => {
     setResult(audit)
@@ -198,33 +199,40 @@ function DraftPanel({
     ]).then(([detail, history]) => {
       if (cancelled) return
       if (detail) setVersions(detail.versions ?? [])
-      if (history) setAuditHistory(history.audits ?? [])
+      if (history) setAuditHistory((history.audits ?? []) as AuditResult[])
     }).catch((error) => {
       console.error('[audit-studio] failed to load version history:', error)
     })
     return () => { cancelled = true }
-  }, [draft.id, draft.version, draft.content, audit])
+  }, [draft.id, draft.version, draft.content, draft.imageMeta?.altText, audit])
+
+  const displayedResult = useMemo(
+    () => (inspectedAuditId ? auditHistory.find((a) => a.id === inspectedAuditId) ?? result : result),
+    [inspectedAuditId, auditHistory, result]
+  )
 
   const dirty =
     draft.kind === 'text' ? content !== draft.content : altText !== (draft.imageMeta?.altText ?? '')
 
   const saveEdits = async () => {
+    if (!canAuthor) return false
     const res = await fetch(`/api/drafts/${draft.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft.kind === 'text' ? { content, actor } : { altText, actor }),
+      body: JSON.stringify(draft.kind === 'text' ? { content, actor: userName } : { altText, actor: userName }),
     })
     if (!res.ok) {
       toast({ title: 'Save failed', description: (await res.json()).error, variant: 'destructive' })
       return false
     }
     await onAuditDone()
-    toast({ title: 'Draft saved', description: 'Content changed — re-run the audit before publishing.' })
+    toast({ title: 'Draft saved', description: 'Content changed — run the audit before remediation.' })
     return true
   }
 
-  const runAudit = async (version?: number) => {
-    if (dirty) {
+  const runAudit = async (options: { version?: number; retryAuditId?: string } = {}) => {
+    if (!canAuthor) return
+    if (options.version === undefined && dirty) {
       const ok = await saveEdits()
       if (!ok) return
     }
@@ -242,7 +250,11 @@ function DraftPanel({
       const res = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftId: draft.id, version, actor }),
+        body: JSON.stringify({
+          draftId: draft.id,
+          version: options.version,
+          retryAuditId: options.retryAuditId,
+        }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Audit failed')
@@ -251,17 +263,20 @@ function DraftPanel({
       setStage(6)
       // small delay so the last pillar animation completes
       await new Promise((r) => setTimeout(r, 450))
-      setResult(body.audit as AuditResult)
-      setAuditHistory((history) => [{
-        id: body.audit.id,
-        version: body.audit.version,
-        createdAt: body.audit.createdAt,
-        vaultSnapshot: body.audit.vaultSnapshot,
-      }, ...history.filter((run) => run.id !== body.audit.id)])
+      const createdAudit = body.audit as AuditResult
+      setResult(createdAudit)
+      setInspectedAuditId(createdAudit.id)
+      setAuditHistory((history) => [createdAudit, ...history.filter((run) => run.id !== createdAudit.id)])
       await onAuditDone()
+      const hasErr = auditHasEngineErrors(createdAudit.pillars)
       toast({
-        title: `Audit complete — compliance score ${body.audit.score}/100`,
-        description: `${body.audit.findings.length} findings · ${body.audit.suppressed} ungrounded AI flags suppressed`,
+        title: hasErr
+          ? `Audit incomplete — score ${createdAudit.score}/100 (provisional)`
+          : `Audit complete — compliance score ${createdAudit.score}/100`,
+        description: hasErr
+          ? 'One or more checks failed. Use Retry failed checks only to recover safely.'
+          : `${createdAudit.findings.length} findings · ${createdAudit.suppressed} ungrounded AI flags suppressed`,
+        variant: hasErr ? 'destructive' : undefined,
       })
     } catch (err) {
       clearInterval(timer)
@@ -278,7 +293,7 @@ function DraftPanel({
     }
   }
 
-  const editable = ['DRAFT', 'CHANGES_REQUESTED', 'AUDITED'].includes(draft.status)
+  const editable = canAuthor && ['DRAFT', 'CHANGES_REQUESTED', 'AUDITED', 'REMEDIATED'].includes(draft.status)
 
   // instant client-side scan of whatever is currently in the editor
   const live = useMemo(
@@ -289,6 +304,7 @@ function DraftPanel({
   // a draft born in the Live Playground auto-runs the full engine on arrival
   useEffect(() => {
     if (
+      canAuthor &&
       autoAuditId &&
       autoAuditId === draft.id &&
       autoRunDone.current !== draft.id &&
@@ -298,7 +314,7 @@ function DraftPanel({
       setAutoAudit(null)
       void runAudit()
     }
-  }, [autoAuditId, draft.id, draft.status])
+  }, [canAuthor, autoAuditId, draft.id, draft.status])
 
   return (
     <div className="space-y-4">
@@ -312,10 +328,13 @@ function DraftPanel({
                 {draft.channel} · v{draft.version} · {draft.creator}
               </span>
             </div>
-            {versions.length > 0 && auditHistory.length > 0 && (
-              <div className="mt-4 border-t border-line pt-3">
+            <h1 className="mt-1.5 font-serif text-xl font-semibold tracking-tight text-ink">
+              {draft.title}
+            </h1>
+            {canAuthor && versions.length > 0 && auditHistory.length > 0 && (
+              <div className="mt-3 border-t border-line pt-3">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink">
-                  <History className="h-3.5 w-3.5" /> Re-audit a saved draft version with current Vault rules
+                  <History className="h-3.5 w-3.5" /> Rerun any saved draft version against current Vault rules
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {versions.slice().sort((a, b) => b.version - a.version).map((version) => (
@@ -323,8 +342,8 @@ function DraftPanel({
                       key={version.id}
                       variant="outline"
                       size="sm"
-                      disabled={running || draft.status === 'APPROVED' && version.version === draft.version}
-                      onClick={() => runAudit(version.version)}
+                      disabled={running || (draft.status === 'APPROVED' && version.version === draft.version)}
+                      onClick={() => void runAudit({ version: version.version })}
                     >
                       <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Audit v{version.version}
                     </Button>
@@ -332,31 +351,36 @@ function DraftPanel({
                 </div>
               </div>
             )}
-            <h1 className="mt-1.5 font-serif text-xl font-semibold tracking-tight text-ink">
-              {draft.title}
-            </h1>
           </div>
-          <div className="flex items-center gap-2">
-            {dirty && editable && (
-              <Button variant="outline" size="sm" onClick={saveEdits}>
-                Save draft
-              </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canAuthor ? (
+              <>
+                {dirty && editable && (
+                  <Button variant="outline" size="sm" onClick={saveEdits}>
+                    Save draft
+                  </Button>
+                )}
+                <Button
+                  onClick={() => void runAudit()}
+                  disabled={running || draft.status === 'APPROVED'}
+                  className="bg-terra-600 hover:bg-terra-500"
+                >
+                  {running ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Auditing…
+                    </>
+                  ) : (
+                    <>
+                      <ScanSearch className="mr-2 h-4 w-4" /> Run 6-Pillar Audit
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <span className="rounded-md border border-line bg-parchment px-2.5 py-1.5 text-xs font-medium text-ink-soft">
+                Read-only ({ROLE_META[role].label}) — Author role runs edits &amp; audits
+              </span>
             )}
-            <Button
-              onClick={() => void runAudit()}
-              disabled={running || draft.status === 'APPROVED'}
-              className="bg-terra-600 hover:bg-terra-500"
-            >
-              {running ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Auditing…
-                </>
-              ) : (
-                <>
-                  <ScanSearch className="mr-2 h-4 w-4" /> Run 6-Pillar Audit
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>
@@ -443,15 +467,19 @@ function DraftPanel({
       </AnimatePresence>
 
       {/* results */}
-      {result && (
+      {displayedResult && (
         <AuditResultPanel
-          result={result}
+          result={displayedResult}
           draft={draft}
+          liveVault={data?.vault ?? []}
+          canAuthor={canAuthor}
+          onSelectAudit={setInspectedAuditId}
           onGoRemediate={() => {
             selectDraft(draft.id, 'remediation')
             setView('remediation')
           }}
-          onRetry={runAudit}
+          onRetryFailed={(ver, retryId) => void runAudit({ version: ver, retryAuditId: retryId })}
+          onRerunVersion={(ver) => void runAudit({ version: ver })}
           history={auditHistory}
           showRedacted={showRedacted}
           onToggleRedacted={() => setShowRedacted((s) => !s)}
@@ -509,23 +537,58 @@ function PillarProgress({ stage, kind }: { stage: number; kind: string }) {
 function AuditResultPanel({
   result,
   draft,
+  liveVault,
+  canAuthor,
+  onSelectAudit,
   onGoRemediate,
   showRedacted,
   onToggleRedacted,
-  onRetry,
+  onRetryFailed,
+  onRerunVersion,
   history,
 }: {
   result: AuditResult
   draft: DraftDTO
+  liveVault: VaultItemDTO[]
+  canAuthor: boolean
+  onSelectAudit: (id: string) => void
   onGoRemediate: () => void
   showRedacted: boolean
   onToggleRedacted: () => void
-  onRetry: () => void
-  history: AuditLineageEntry[]
+  onRetryFailed: (version: number, retryAuditId: string) => void
+  onRerunVersion: (version: number) => void
+  history: AuditResult[]
 }) {
   const incomplete = auditHasEngineErrors(result.pillars)
   const historical = result.version !== draft.version
   const failedPillars = result.pillars.filter((pillar) => pillar.status === 'error')
+  const succeededCount = result.pillars.filter((pillar) => pillar.status !== 'error').length
+  const liveDrift = useMemo(
+    () => diffVaultSnapshot(result.vaultSnapshot, liveVault),
+    [result.vaultSnapshot, liveVault]
+  )
+  const olderRuns = useMemo(
+    () => history.filter((r) => r.id !== result.id),
+    [history, result.id]
+  )
+  const defaultCompareId = useMemo(() => {
+    const sameVer = olderRuns.find((r) => r.version === result.version && r.createdAt < result.createdAt)
+    const earlier = olderRuns.find((r) => r.createdAt < result.createdAt)
+    return sameVer?.id ?? earlier?.id ?? olderRuns[0]?.id ?? ''
+  }, [olderRuns, result.version, result.createdAt])
+  const [customBaseline, setCustomBaseline] = useState<{ resultId: string; id: string } | null>(null)
+  const effectiveBaselineId =
+    customBaseline?.resultId === result.id && olderRuns.some((r) => r.id === customBaseline.id)
+      ? customBaseline.id
+      : defaultCompareId
+  const baselineRun = olderRuns.find((r) => r.id === effectiveBaselineId) ?? null
+  const impact = useMemo(
+    () => (baselineRun ? compareAudits(baselineRun, result) : null),
+    [baselineRun, result]
+  )
+  const canRerunThisVersion =
+    canAuthor && !(draft.status === 'APPROVED' && result.version === draft.version)
+
   const verdict = incomplete
     ? { text: 'Audit incomplete — rerun checks', cls: 'text-clay-600' }
     : result.score >= 85
@@ -540,41 +603,85 @@ function AuditResultPanel({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
+      {/* run history selector when multiple audits exist */}
+      {history.length > 1 && (
+        <div className="rounded-xl border border-line bg-paper p-3.5">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
+            <History className="h-3.5 w-3.5" /> Audit runs recorded for this draft ({history.length})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {history.map((run) => {
+              const runIncomplete = auditHasEngineErrors(run.pillars)
+              const active = run.id === result.id
+              return (
+                <button
+                  key={run.id}
+                  type="button"
+                  onClick={() => onSelectAudit(run.id)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                    active
+                      ? 'border-terra-400 bg-terra-50 font-semibold text-terra-800'
+                      : 'border-line bg-parchment/60 text-ink-soft hover:border-stone-300 hover:text-ink'
+                  )}
+                >
+                  <span>v{run.version}</span>
+                  <span className="tabular-nums font-bold">{run.score}/100</span>
+                  {runIncomplete && (
+                    <span className="rounded bg-clay-100 px-1 py-0.5 text-[9.5px] font-bold text-clay-700">
+                      Incomplete
+                    </span>
+                  )}
+                  <span className="text-[10px] text-faint">
+                    {new Date(run.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* score + pillars */}
       <div className="rounded-xl border border-line bg-paper p-5">
         <div className="flex flex-wrap items-center gap-6">
-          <div className="flex items-center gap-5">
+          <div className="flex flex-col items-center">
             <ScoreRing score={result.score} />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-                Compliance verdict
-              </p>
-              <p className={cn('text-xl font-bold', verdict.cls)}>{verdict.text}</p>
-              {incomplete && (
-                <span className="mt-1 inline-flex rounded-full border border-clay-300 bg-clay-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-clay-700">
-                  Incomplete
+            {incomplete && (
+              <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-clay-700">
+                Provisional
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+              Compliance verdict
+            </p>
+            <p className={cn('text-xl font-bold', verdict.cls)}>{verdict.text}</p>
+            {incomplete && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-clay-300 bg-clay-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-clay-700">
+                Incomplete · {succeededCount}/6 verified · {failedPillars.length} failed
+              </span>
+            )}
+            <p className="mt-1 text-xs text-stone-500">
+              {result.findings.length} findings ·{' '}
+              {result.findings.filter((f) => f.severity === 'critical').length} critical
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700">
+                <ShieldCheck className="h-3 w-3" />
+                Zero-hallucination guard: {result.suppressed} ungrounded AI flag
+                {result.suppressed === 1 ? '' : 's'} suppressed
+              </span>
+              {result.aiLedger.map((l, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700"
+                  title={l.purpose}
+                >
+                  <Cpu className="h-3 w-3" /> {l.model}
                 </span>
-              )}
-              <p className="mt-1 text-xs text-stone-500">
-                {result.findings.length} findings ·{' '}
-                {result.findings.filter((f) => f.severity === 'critical').length} critical
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700">
-                  <ShieldCheck className="h-3 w-3" />
-                  Zero-hallucination guard: {result.suppressed} ungrounded AI flag
-                  {result.suppressed === 1 ? '' : 's'} suppressed
-                </span>
-                {result.aiLedger.map((l, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 rounded-md border border-terra-200 bg-terra-50 px-2 py-1 text-[10.5px] font-semibold text-terra-700"
-                    title={l.purpose}
-                  >
-                    <Cpu className="h-3 w-3" /> {l.model}
-                  </span>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
           <div className="ml-auto flex flex-col items-end gap-2">
@@ -584,11 +691,17 @@ function AuditResultPanel({
             <Button
               onClick={onGoRemediate}
               disabled={incomplete || historical}
-              title={historical ? 'Historical audits are read-only; audit the current version to remediate.' : incomplete ? 'Rerun the failed checks before remediation or review.' : undefined}
+              title={historical ? 'Historical audits are read-only; inspect or audit the current version to remediate.' : incomplete ? 'Recover the failed checks before remediation or review.' : undefined}
               className="bg-ink hover:bg-stone-800"
             >
               <WandSparkles className="mr-2 h-4 w-4" />
-              {historical ? 'Historical audit — read only' : incomplete ? 'Rerun failed checks before remediation' : 'Open Remediation Studio'}
+              {historical
+                ? 'Historical audit — read only'
+                : incomplete
+                  ? 'Audit incomplete — blocked'
+                  : canAuthor
+                    ? 'Open Remediation Studio'
+                    : 'Inspect Findings Queue'}
             </Button>
           </div>
         </div>
@@ -596,19 +709,45 @@ function AuditResultPanel({
         {incomplete && (
           <div
             role="alert"
-            className="rounded-xl border border-clay-300 bg-clay-50 p-4 text-sm text-clay-800"
+            className="mt-4 rounded-xl border border-clay-300 bg-clay-50 p-4 text-sm text-clay-800"
           >
-            <p className="font-semibold">This audit is incomplete and is not a clean result.</p>
-            <ul className="mt-1 list-inside list-disc text-xs">
+            <p className="font-semibold">
+              This audit is incomplete and cannot be treated as clean, remediated, or approved.
+            </p>
+            <p className="mt-0.5 text-xs text-clay-700">
+              {succeededCount} check{succeededCount === 1 ? '' : 's'} finished cleanly; {failedPillars.length} check{failedPillars.length === 1 ? '' : 's'} failed and must be recovered:
+            </p>
+            <ul className="mt-2 list-inside list-disc text-xs">
               {failedPillars.map((pillar) => (
                 <li key={pillar.pillar}>
-                  {PILLAR_META[pillar.pillar].short}: {pillar.detail}
+                  <strong>{PILLAR_META[pillar.pillar].short}:</strong> {pillar.detail}
                 </li>
               ))}
             </ul>
-            <Button className="mt-3" size="sm" onClick={onRetry}>
-              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry failed checks
-            </Button>
+            {canAuthor ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className="bg-clay-700 text-cream hover:bg-clay-600"
+                  onClick={() => onRetryFailed(result.version, result.id)}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  {liveDrift.isStale ? 'Rerun full audit (Vault changed)' : 'Retry failed checks only'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-clay-300 bg-paper text-clay-800 hover:bg-clay-100"
+                  onClick={() => onRerunVersion(result.version)}
+                >
+                  Run full 6-pillar rerun
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs font-medium text-clay-700">
+                An Author must recover the failed checks before this draft can move forward.
+              </p>
+            )}
           </div>
         )}
 
@@ -620,7 +759,100 @@ function AuditResultPanel({
         </div>
       </div>
 
-      <VaultLineage result={result} history={history} />
+      <VaultLineage
+        result={result}
+        history={history}
+        liveDrift={liveDrift}
+        canRerun={canRerunThisVersion}
+        onRerun={() => onRerunVersion(result.version)}
+      />
+
+      {olderRuns.length > 0 && impact && baselineRun && (
+        <div className="rounded-xl border border-line bg-paper p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink">
+              <GitCompareArrows className="h-4 w-4 text-terra-600" />
+              Policy &amp; version impact diff
+            </h3>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-faint">Baseline:</span>
+              <Select value={baselineRun.id} onValueChange={(id) => setCustomBaseline({ resultId: result.id, id })}>
+                <SelectTrigger className="h-8 w-56 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {olderRuns.map((r) => (
+                    <SelectItem key={r.id} value={r.id} className="text-xs">
+                      v{r.version} · {r.score}/100 · {new Date(r.createdAt).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <div className="rounded-lg border border-line bg-parchment/60 p-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Score change</p>
+              <p
+                className={cn(
+                  'mt-0.5 text-base font-bold tabular-nums',
+                  impact.scoreDelta > 0 ? 'text-olive-700' : impact.scoreDelta < 0 ? 'text-clay-700' : 'text-ink'
+                )}
+              >
+                {impact.scoreDelta > 0 ? `+${impact.scoreDelta}` : impact.scoreDelta} pts
+              </p>
+            </div>
+            <div className="rounded-lg border border-line bg-parchment/60 p-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Rules changed</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums text-ink">{impact.ruleChanges.length}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-parchment/60 p-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Newly flagged</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums text-clay-700">+{impact.addedFindings.length}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-parchment/60 p-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Resolved</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums text-olive-700">-{impact.resolvedFindings.length}</p>
+            </div>
+          </div>
+          {(impact.addedFindings.length > 0 || impact.resolvedFindings.length > 0 || impact.ruleChanges.length > 0) && (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-clay-200 bg-clay-50/40 p-3">
+                <p className="text-[10.5px] font-bold uppercase tracking-wider text-clay-700">
+                  Added in this audit ({impact.addedFindings.length})
+                </p>
+                {impact.addedFindings.length === 0 ? (
+                  <p className="mt-1 text-xs text-faint">None</p>
+                ) : (
+                  <ul className="mt-1.5 space-y-1 text-xs text-ink-soft">
+                    {impact.addedFindings.map((f) => (
+                      <li key={f.key} className="truncate">
+                        <span className="font-mono text-[10px] text-clay-700">{f.clauseId ?? '—'}</span> · {f.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="rounded-lg border border-olive-200 bg-olive-50/40 p-3">
+                <p className="text-[10.5px] font-bold uppercase tracking-wider text-olive-700">
+                  Cleared since baseline ({impact.resolvedFindings.length})
+                </p>
+                {impact.resolvedFindings.length === 0 ? (
+                  <p className="mt-1 text-xs text-faint">None</p>
+                ) : (
+                  <ul className="mt-1.5 space-y-1 text-xs text-ink-soft">
+                    {impact.resolvedFindings.map((f) => (
+                      <li key={f.key} className="truncate">
+                        <span className="font-mono text-[10px] text-olive-700">{f.clauseId ?? '—'}</span> · {f.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* redaction preview */}
       {result.redactedPreview && draft.kind === 'text' && (
@@ -688,7 +920,19 @@ function AuditResultPanel({
   )
 }
 
-function VaultLineage({ result, history }: { result: AuditResult; history: AuditLineageEntry[] }) {
+function VaultLineage({
+  result,
+  history,
+  liveDrift,
+  canRerun,
+  onRerun,
+}: {
+  result: AuditResult
+  history: AuditResult[]
+  liveDrift: ReturnType<typeof diffVaultSnapshot>
+  canRerun: boolean
+  onRerun: () => void
+}) {
   const previous = history
     .filter((run) => run.id !== result.id && run.createdAt < result.createdAt)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
@@ -699,25 +943,61 @@ function VaultLineage({ result, history }: { result: AuditResult; history: Audit
   )
 
   return (
-    <div className="rounded-xl border border-line bg-paper p-4">
-      <h3 className="text-sm font-bold text-ink">Vault rule lineage</h3>
-      <p className="mt-1 text-xs text-stone-500">
-        This audit used {result.vaultSnapshot.length} active rule versions.
-        {previous ? ` Compared with audit of v${previous.version}.` : ' This is the first recorded audit.'}
-      </p>
+    <div className="rounded-xl border border-line bg-paper p-4 space-y-2.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-bold text-ink">Vault rule lineage</h3>
+          <p className="mt-0.5 text-xs text-stone-500">
+            This audit evaluated {result.vaultSnapshot.length} active Vault rule version(s).
+            {previous ? ` Compared with prior audit of v${previous.version}.` : ' This is the first recorded audit.'}
+          </p>
+        </div>
+        {liveDrift.isStale && canRerun && (
+          <Button size="sm" variant="outline" className="h-8 border-ochre-300 bg-ochre-50 text-xs text-ochre-900 hover:bg-ochre-100" onClick={onRerun}>
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Re-audit v{result.version} under live rules
+          </Button>
+        )}
+      </div>
+
+      {liveDrift.isStale && (
+        <div className="rounded-lg border border-ochre-300 bg-ochre-50/70 p-3 text-xs text-ochre-900">
+          <p className="flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5 text-ochre-600" />
+            Vault rules changed since this audit ran ({liveDrift.staleCount} difference{liveDrift.staleCount === 1 ? '' : 's'} vs live Vault)
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-[11px]">
+            {liveDrift.updated.map((u) => (
+              <li key={u.clauseId}>
+                <code>{u.clauseId}</code> ({u.title}): audited v{u.auditedVer} → live v{u.liveVer}
+              </li>
+            ))}
+            {liveDrift.added.map((a) => (
+              <li key={a.clauseId}>
+                <code>{a.clauseId}</code> ({a.title}): new rule added at v{a.liveVer}
+              </li>
+            ))}
+            {liveDrift.removed.map((r) => (
+              <li key={r.clauseId}>
+                <code>{r.clauseId}</code>: audited v{r.auditedVer} → archived in live Vault
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {previous && (changes.length > 0 || removed.length > 0) ? (
-        <ul className="mt-2 space-y-1 text-xs text-ink-soft">
+        <ul className="space-y-1 text-xs text-ink-soft">
           {changes.map((rule) => (
             <li key={rule.clauseId}>{rule.clauseId}: {previousRules.has(rule.clauseId) ? `v${previousRules.get(rule.clauseId)}` : 'new'} → v{rule.ruleVer}</li>
           ))}
           {removed.map((rule) => <li key={rule.clauseId}>{rule.clauseId}: v{rule.ruleVer} → inactive/removed</li>)}
         </ul>
       ) : previous ? (
-        <p className="mt-2 text-xs text-olive-700">No active rule versions changed since the previous audit.</p>
+        <p className="text-xs text-olive-700">No rule version differences vs the preceding audit run.</p>
       ) : null}
-      <details className="mt-2">
+      <details>
         <summary className="cursor-pointer text-xs font-medium text-terra-700">
-          Show rule versions used
+          Show all {result.vaultSnapshot.length} rule versions captured in this audit
         </summary>
         <ul className="mt-2 grid gap-1 text-[11px] text-ink-soft sm:grid-cols-2">
           {result.vaultSnapshot.map((rule) => (
@@ -869,7 +1149,7 @@ export function FindingCard({
 // ── New draft dialog ─────────────────────────────────────────
 
 function NewDraftButton() {
-  const { refresh, role } = useApp()
+  const { refresh, userName } = useApp()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [channel, setChannel] = useState('LinkedIn')
@@ -930,7 +1210,7 @@ function NewDraftButton() {
           content: kind === 'text' ? content : '',
           imageData: image?.dataUrl,
           imageMeta: image ? { ...image.meta, altText } : undefined,
-          creator: roleIdentity(role).name,
+          creator: userName,
         }),
       })
       const body = await res.json()

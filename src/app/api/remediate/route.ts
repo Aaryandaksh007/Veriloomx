@@ -28,6 +28,12 @@ export async function POST(req: NextRequest) {
 
   const findings = JSON.parse(audit.findings) as Finding[]
   const pillars = JSON.parse(audit.pillarSummaries) as PillarSummary[]
+  if (!['AUDITED', 'CHANGES_REQUESTED', 'REMEDIATED'].includes(draft.status)) {
+    return NextResponse.json(
+      { error: `Remediation is not available while the draft is ${draft.status}. Run a fresh audit first.` },
+      { status: 409 }
+    )
+  }
   if (audit.version !== draft.version) {
     return NextResponse.json(
       { error: 'This audit is for an older draft version. Run a fresh audit before remediation.' },
@@ -41,6 +47,33 @@ export async function POST(req: NextRequest) {
     )
   }
   const actionsBy = new Map(audit.actions.map((a) => [a.findingKey, a]))
+
+  // Clean 0-finding fast-path: confirm clean audit without creating a duplicate version row
+  if (findings.length === 0 && Boolean(body?.confirmClean)) {
+    await db.draft.update({ where: { id: draftId }, data: { status: 'REMEDIATED' } })
+    await db.eventLog.create({
+      data: {
+        draftId,
+        actor: user.name,
+        action: 'STATUS_CHANGE',
+        details: JSON.stringify({
+          from: draft.status,
+          to: 'REMEDIATED',
+          applied: 0,
+          overrides: 0,
+          clean: true,
+          version: draft.version,
+        }),
+      },
+    })
+    return NextResponse.json({
+      ok: true,
+      version: draft.version,
+      applied: 0,
+      overrides: 0,
+      clean: true,
+    })
+  }
 
   const unresolved = findings.filter((f) => !actionsBy.has(f.key))
   if (unresolved.length > 0) {
@@ -112,18 +145,15 @@ export async function POST(req: NextRequest) {
   // ── image drafts: remediation touches alt text only ──────
   const meta = draft.imageMeta ? JSON.parse(draft.imageMeta) : null
   if (meta) {
+    let applied = 0
     const altFinding = findings.find((f) => f.meta?.kind === 'alt-text')
     const altAction = altFinding ? actionsBy.get(altFinding.key) : undefined
     if (altAction && altAction.action !== 'overridden') {
       meta.altText = (altAction.appliedText ?? altFinding?.suggestion ?? meta.altText)
         .replace(/^"|"$/g, '')
-      await db.draft.update({
-        where: { id: draftId },
-        data: { imageMeta: JSON.stringify(meta), status: 'REMEDIATED' },
-      })
-    } else {
-      await db.draft.update({ where: { id: draftId }, data: { status: 'REMEDIATED' } })
+      applied = 1
     }
+    const nextMetaJson = JSON.stringify(meta)
     const version = draft.version + 1
     await db.draftVersion.create({
       data: {
@@ -131,21 +161,33 @@ export async function POST(req: NextRequest) {
         version,
         content: '',
         imageData: draft.imageData,
-        imageMeta: draft.imageMeta,
-        note: `Remediated — ${overrides.length} human override(s) preserved`,
+        imageMeta: nextMetaJson,
+        note: `Remediated — ${applied} alt-text fix(es) applied, ${overrides.length} human override(s) preserved`,
       },
     })
-    await db.draft.update({ where: { id: draftId }, data: { version } })
+    await db.draft.update({
+      where: { id: draftId },
+      data: { imageMeta: nextMetaJson, status: 'REMEDIATED', version },
+    })
+
+    await db.eventLog.create({
+      data: {
+        draftId,
+        actor: user.name,
+        action: 'STATUS_CHANGE',
+        details: JSON.stringify({
+          from: draft.status,
+          to: 'REMEDIATED',
+          kind: 'image',
+          applied,
+          overrides: overrides.length,
+          version,
+        }),
+      },
+    })
+
+    return NextResponse.json({ ok: true, version, applied, overrides: overrides.length })
   }
 
-  await db.eventLog.create({
-    data: {
-      draftId,
-      actor: user.name,
-      action: 'STATUS_CHANGE',
-      details: JSON.stringify({ from: draft.status, to: 'REMEDIATED', kind: 'image' }),
-    },
-  })
-
-  return NextResponse.json({ ok: true, version: draft.version + 1, applied: 0, overrides: overrides.length })
+  return NextResponse.json({ ok: true, version: draft.version, applied: 0, overrides: overrides.length })
 }

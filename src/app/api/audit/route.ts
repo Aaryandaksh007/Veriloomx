@@ -17,12 +17,17 @@ export async function POST(req: NextRequest) {
   if (version !== undefined && (!Number.isInteger(version) || version < 1)) {
     return NextResponse.json({ error: 'version must be a positive integer' }, { status: 400 })
   }
+  const retryAuditId =
+    typeof body?.retryAuditId === 'string' && body.retryAuditId.trim()
+      ? body.retryAuditId.trim()
+      : undefined
 
   const draft = await db.draft.findUnique({ where: { id: draftId } })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   if (version !== undefined && version > draft.version) {
     return NextResponse.json({ error: 'version cannot exceed the current draft version' }, { status: 400 })
   }
+  const targetVersion = version ?? draft.version
   if (version !== undefined && version < draft.version) {
     const savedVersion = await db.draftVersion.findUnique({
       where: { draftId_version: { draftId, version } },
@@ -35,22 +40,35 @@ export async function POST(req: NextRequest) {
     if (draft.kind === 'image' && !savedVersion.imageData) {
       return NextResponse.json({ error: 'The saved image version has no asset and cannot be audited.' }, { status: 409 })
     }
+  } else {
+    if (draft.kind === 'text' && !draft.content.trim()) {
+      return NextResponse.json({ error: 'The text draft is empty and cannot be audited.' }, { status: 409 })
+    }
+    if (draft.kind === 'image' && !draft.imageData) {
+      return NextResponse.json({ error: 'The image asset is missing and cannot be audited.' }, { status: 409 })
+    }
   }
-  if (draft.status === 'APPROVED' && (version === undefined || version === draft.version)) {
+  if (draft.status === 'APPROVED' && targetVersion === draft.version) {
     return NextResponse.json(
       { error: 'This draft is approved and sealed — audit a new draft instead.' },
       { status: 409 }
     )
   }
-  if (draft.kind === 'text' && !draft.content.trim()) {
-    return NextResponse.json({ error: 'The text draft is empty and cannot be audited.' }, { status: 409 })
-  }
-  if (draft.kind === 'image' && !draft.imageData) {
-    return NextResponse.json({ error: 'The image asset is missing and cannot be audited.' }, { status: 409 })
+  if (retryAuditId) {
+    const prior = await db.auditRun.findUnique({
+      where: { id: retryAuditId },
+      select: { draftId: true, version: true },
+    })
+    if (!prior || prior.draftId !== draftId || prior.version !== targetVersion) {
+      return NextResponse.json(
+        { error: 'The incomplete audit could not be matched to this draft version.' },
+        { status: 404 }
+      )
+    }
   }
 
   try {
-    const result = await runAudit(draftId, user.name, { version })
+    const result = await runAudit(draftId, user.name, { version, retryAuditId })
     return NextResponse.json({ audit: result })
   } catch (err) {
     console.error('[audit] engine failure:', err)
@@ -70,14 +88,7 @@ export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('history') === '1') {
     const runs = await db.auditRun.findMany({ where: { draftId }, orderBy: { createdAt: 'desc' } })
     return NextResponse.json({
-      audits: runs.map((run) => ({
-        id: run.id,
-        version: run.version,
-        createdAt: run.createdAt.toISOString(),
-        vaultSnapshot: run.vaultSnapshot
-          ? JSON.parse(run.vaultSnapshot) as { clauseId: string; ruleVer: number }[]
-          : [],
-      })),
+      audits: runs.map((run) => serialiseAudit(run, draftId)),
     })
   }
   const run = await db.auditRun.findFirst({ where: { draftId }, orderBy: { createdAt: 'desc' } })

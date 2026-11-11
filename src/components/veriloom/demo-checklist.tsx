@@ -71,8 +71,8 @@ export function DemoChecklist() {
       title: 'Fix findings in Remediation',
       hint:
         role === 'creator'
-          ? 'Accept the one-click fixes — every flag cites its guideline clause.'
-          : 'Switch to the Creator role, then accept the one-click fixes.',
+          ? 'Accept or override each cited finding before creating a remediated version.'
+          : 'Requires an Author account — inspect the findings queue and cited clauses.',
       done: remediationDone,
       action: () => {
         if (remediationTarget) selectDraft(remediationTarget.id, 'remediation')
@@ -84,8 +84,10 @@ export function DemoChecklist() {
       title: 'Send for review & approve',
       hint:
         role === 'reviewer'
-          ? 'You hold the final sign-off — approve the draft that reached review.'
-          : 'Creator submits, Manager pre-screens, Reviewer approves — switch roles to walk it.',
+          ? 'You hold Approver sign-off — approve a draft once it reaches In Review.'
+          : role === 'manager'
+            ? 'You hold Reviewer access — inspect version diffs and request changes if needed.'
+            : 'Separate Author, Reviewer, and Approver accounts verify submission, changes, and final sign-off.',
       done: approvalDone,
       action: () => setView('review'),
     },

@@ -4,24 +4,32 @@
 // VeriLoom AI — Role-Based Review & Approval
 // Authenticated role gates, version diffs, threaded comments, state machine.
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ClipboardCheck,
   Send,
   Undo2,
   BadgeCheck,
-  Lock,
   MessageSquare,
   Loader2,
   FileText,
   ImageIcon,
   History,
+  GitCompareArrows,
 } from 'lucide-react'
-import { useApp, roleIdentity, type View } from '@/lib/store'
+import { useApp, type View } from '@/lib/store'
+import { wordDiff } from '@/lib/diff'
 import { ROLE_META, type CommentDTO, type DraftDTO, type DraftVersionDTO } from '@/lib/types'
 import { StatusChip, timeAgo, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -48,7 +56,7 @@ const FLOW: { id: string; label: string }[] = [
 ]
 
 export function ReviewView() {
-  const { data, selectedDraftId, selectDraft, refresh, role } = useApp()
+  const { data, selectedDraftId, selectDraft, refresh, role, userName } = useApp()
   const drafts = data?.drafts ?? []
   const selected = drafts.find((d) => d.id === selectedDraftId) ?? null
   const [detail, setDetail] = useState<ReviewDetail | null>(null)
@@ -107,16 +115,8 @@ export function ReviewView() {
     }
   }
 
-  const identity = roleIdentity(role)
   const draft = detail?.draft ?? selected
-  const previousVersion =
-    detail && detail.versions.length > 1
-      ? detail.versions[detail.versions.length - 2]
-      : null
-  const currentVersion =
-    detail && detail.versions.length > 1
-      ? detail.versions[detail.versions.length - 1]
-      : null
+  const versions = detail?.versions ?? []
 
   return (
     <div className="space-y-5">
@@ -206,21 +206,14 @@ export function ReviewView() {
               </div>
               {draft.status === 'CHANGES_REQUESTED' && (
                 <p className="mt-2 text-[11px] font-medium text-ochre-700">
-                  The manager sent this back — edit the content (Audit Studio), re-audit, remediate
-                  and resubmit.
+                  The Reviewer sent this back — edit the content in Audit Studio, re-audit, remediate, and resubmit.
                 </p>
               )}
             </div>
 
             {/* version diff */}
-            {previousVersion && currentVersion && draft.kind === 'text' && (
-              <div className="rounded-xl border border-line bg-paper p-4">
-                <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
-                  <History className="h-3.5 w-3.5" />
-                  Version comparison · v{previousVersion.version} → v{currentVersion.version}
-                </p>
-                <VersionCompare previous={previousVersion} current={currentVersion} />
-              </div>
+            {versions.length > 1 && (
+              <VersionCompare versions={versions} kind={draft.kind} />
             )}
 
             {/* content */}
@@ -247,39 +240,92 @@ export function ReviewView() {
               )}
             </div>
 
-            {/* Demo role actions */}
+            {/* Role-gated workflow controls (only allowed role action shown) */}
             <div className="rounded-xl border border-line bg-ink p-4 text-cream">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-                Sign-off console — you are {identity.name} ({ROLE_META[role].label})
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <RbacButton
-                  label="Submit for review"
-                  desc="Creator sends the remediated draft to the review desk"
-                  allowed={role === 'creator'}
-                  enabled={draft.status === 'REMEDIATED'}
-                  busy={busy}
-                  onClick={() => act('submit')}
-                  variant="emerald"
-                />
-                <RbacButton
-                  label="Request changes"
-                  desc="Brand Manager returns the draft with a note"
-                  allowed={role === 'manager'}
-                  enabled={draft.status === 'IN_REVIEW'}
-                  busy={busy}
-                  onClick={() => setChangesOpen(true)}
-                  variant="amber"
-                />
-                <RbacButton
-                  label="Approve & issue certificate"
-                  desc="Authorised Reviewer signs off — certificate is generated"
-                  allowed={role === 'reviewer'}
-                  enabled={draft.status === 'IN_REVIEW'}
-                  busy={busy}
-                  onClick={() => act('approve')}
-                  variant="emerald"
-                />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                  Sign-off console — {userName} ({ROLE_META[role].label})
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10.5px] text-stone-400">
+                  <span className={cn(draft.status === 'REMEDIATED' && 'font-bold text-terra-300')}>
+                    1. Author submits
+                  </span>
+                  <span>·</span>
+                  <span className={cn(draft.status === 'IN_REVIEW' && 'font-bold text-ochre-300')}>
+                    2. Reviewer screens
+                  </span>
+                  <span>·</span>
+                  <span className={cn(draft.status === 'APPROVED' ? 'font-bold text-olive-300' : draft.status === 'IN_REVIEW' && 'font-bold text-terra-300')}>
+                    3. Approver signs off
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                {role === 'creator' && (
+                  draft.status === 'REMEDIATED' ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => act('submit')}
+                      className="bg-terra-500 text-cream hover:bg-terra-400"
+                    >
+                      {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Submit v{draft.version} for review
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-stone-300">
+                      {draft.status === 'IN_REVIEW'
+                        ? 'Submitted — waiting for Reviewer or Approver action.'
+                        : draft.status === 'APPROVED'
+                          ? 'Approved and sealed — certificate available.'
+                          : 'Complete audit and remediation in Audit Studio / Remediation first, then submit for review here.'}
+                    </p>
+                  )
+                )}
+
+                {role === 'manager' && (
+                  draft.status === 'IN_REVIEW' ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => setChangesOpen(true)}
+                      className="bg-ochre-600 text-cream hover:bg-ochre-500"
+                    >
+                      <Undo2 className="mr-2 h-4 w-4" />
+                      Request changes from Author
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-stone-300">
+                      {draft.status === 'APPROVED'
+                        ? 'Approved and sealed — no changes can be requested.'
+                        : 'Draft enters your review queue once the Author submits it (In Review).'}
+                    </p>
+                  )
+                )}
+
+                {role === 'reviewer' && (
+                  draft.status === 'IN_REVIEW' ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => act('approve')}
+                      className="bg-olive-600 text-cream hover:bg-olive-500"
+                    >
+                      {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BadgeCheck className="mr-2 h-4 w-4" />}
+                      Approve &amp; issue certificate
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-stone-300">
+                      {draft.status === 'APPROVED'
+                        ? 'Signed off — tamper-evident certificate issued.'
+                        : 'Draft reaches final sign-off after the Author submits it for review.'}
+                    </p>
+                  )
+                )}
+
+                {role === 'admin' && (
+                  <p className="text-xs text-stone-300">
+                    Administrator oversight view — submission, change requests, and final sign-off are restricted to Author, Reviewer, and Approver accounts.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -314,7 +360,7 @@ export function ReviewView() {
           <div className="mt-2 rounded-xl border border-line bg-paper p-2.5">
             <Textarea
               className="min-h-[60px] text-xs"
-              placeholder={`Comment as ${identity.name}…`}
+              placeholder={`Comment as ${userName}…`}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
@@ -332,7 +378,7 @@ export function ReviewView() {
                     body: JSON.stringify({
                       draftId: selected.id,
                       body: comment.trim(),
-                      author: identity.name,
+                      author: userName,
                       role,
                     }),
                   })
@@ -385,75 +431,169 @@ export function ReviewView() {
   )
 }
 
-function RbacButton({
-  label,
-  desc,
-  allowed,
-  enabled,
-  busy,
-  onClick,
-  variant,
-}: {
-  label: string
-  desc: string
-  allowed: boolean
-  enabled: boolean
-  busy: boolean
-  onClick: () => void
-  variant: 'emerald' | 'amber'
-}) {
-  const disabled = !allowed || !enabled || busy
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={allowed ? desc : 'Demo workflow — switch the acting role to use this action'}
-      className={cn(
-        'group flex min-w-[210px] flex-1 items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-left transition-all',
-        disabled && 'cursor-not-allowed opacity-45',
-        !disabled &&
-          variant === 'emerald' &&
-          'border-olive-400/40 bg-olive-500/10 hover:border-olive-400 hover:bg-olive-500/20',
-        !disabled && variant === 'amber' && 'border-ochre-400/40 bg-ochre-500/10 hover:border-ochre-400 hover:bg-ochre-500/20'
-      )}
-    >
-      <span>
-        <span className="flex items-center gap-1.5 text-[13px] font-bold text-cream">
-          {!allowed && <Lock className="h-3.5 w-3.5 text-stone-500" />}
-          {label}
-        </span>
-        <span className="mt-0.5 block text-[10.5px] leading-snug text-stone-400">{desc}</span>
-      </span>
-      {busy && disabled ? <Loader2 className="h-4 w-4 animate-spin text-stone-400" /> : null}
-    </button>
-  )
-}
-
 function VersionCompare({
-  previous,
-  current,
+  versions,
+  kind,
 }: {
-  previous: DraftVersionDTO
-  current: DraftVersionDTO
+  versions: DraftVersionDTO[]
+  kind: 'text' | 'image'
 }) {
+  const [mode, setMode] = useState<'inline' | 'split'>('inline')
+  const [fromVer, setFromVer] = useState<number>(versions[versions.length - 2].version)
+  const [toVer, setToVer] = useState<number>(versions[versions.length - 1].version)
+
+  useEffect(() => {
+    setFromVer(versions[Math.max(0, versions.length - 2)].version)
+    setToVer(versions[versions.length - 1].version)
+  }, [versions])
+
+  const previous = versions.find((v) => v.version === fromVer) ?? versions[versions.length - 2]
+  const current = versions.find((v) => v.version === toVer) ?? versions[versions.length - 1]
+
+  const prevText =
+    kind === 'image' ? (previous.imageMeta?.altText ?? '') : (previous.content ?? '')
+  const currText =
+    kind === 'image' ? (current.imageMeta?.altText ?? '') : (current.content ?? '')
+
+  const tokens = useMemo(() => wordDiff(prevText, currText), [prevText, currText])
+  const stats = useMemo(() => {
+    let added = 0
+    let removed = 0
+    for (const t of tokens) {
+      const words = t.text.trim().split(/\s+/).filter(Boolean).length
+      if (t.op === 'add') added += words
+      else if (t.op === 'remove') removed += words
+    }
+    return { added, removed }
+  }, [tokens])
+
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <div className="min-w-0 rounded-lg border border-clay-200 bg-clay-50/50 p-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-clay-700">
-          Previous · v{previous.version}
-        </p>
-        <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
-          {previous.content || 'No text content'}
-        </p>
+    <div className="rounded-xl border border-line bg-paper p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
+            <History className="h-3.5 w-3.5" />
+            {kind === 'image' ? 'Alt-text & asset comparison' : 'Version comparison'}
+          </p>
+          <span className="rounded-full bg-olive-50 px-2 py-0.5 text-[10px] font-bold text-olive-700">
+            +{stats.added} words
+          </span>
+          <span className="rounded-full bg-clay-50 px-2 py-0.5 text-[10px] font-bold text-clay-700">
+            -{stats.removed} words
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {versions.length > 2 && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Select value={String(previous.version)} onValueChange={(v) => setFromVer(Number(v))}>
+                <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {versions.map((v) => (
+                    <SelectItem key={v.id} value={String(v.version)} className="text-xs">v{v.version}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-faint">→</span>
+              <Select value={String(current.version)} onValueChange={(v) => setToVer(Number(v))}>
+                <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {versions.map((v) => (
+                    <SelectItem key={v.id} value={String(v.version)} className="text-xs">v{v.version}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="inline-flex rounded-md border border-line bg-parchment p-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setMode('inline')}
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-2 py-1 font-semibold transition-colors',
+                mode === 'inline' ? 'bg-paper text-ink shadow-xs' : 'text-ink-soft hover:text-ink'
+              )}
+            >
+              <GitCompareArrows className="h-3 w-3" /> Word diff
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('split')}
+              className={cn(
+                'rounded px-2 py-1 font-semibold transition-colors',
+                mode === 'split' ? 'bg-paper text-ink shadow-xs' : 'text-ink-soft hover:text-ink'
+              )}
+            >
+              Side by side
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="min-w-0 rounded-lg border border-olive-200 bg-olive-50/50 p-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-olive-700">
-          Current · v{current.version}
+
+      {current.note && (
+        <p className="text-[11px] text-ink-soft">
+          <span className="font-semibold text-ink">v{current.version} note:</span> {current.note}
         </p>
-        <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
-          {current.content || 'No text content'}
-        </p>
-      </div>
+      )}
+
+      {mode === 'inline' ? (
+        <div className="rounded-lg border border-line bg-parchment/50 p-3.5 whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
+          {tokens.length === 0 ? (
+            <span className="text-xs italic text-faint">No text differences recorded between v{previous.version} and v{current.version}.</span>
+          ) : (
+            tokens.map((tok, i) =>
+              tok.op === 'remove' ? (
+                <del key={i} className="rounded bg-clay-100 px-0.5 text-clay-800 line-through decoration-clay-500">
+                  {tok.text}
+                </del>
+              ) : tok.op === 'add' ? (
+                <ins key={i} className="rounded bg-olive-100 px-0.5 font-medium text-olive-900 no-underline">
+                  {tok.text}
+                </ins>
+              ) : (
+                <span key={i}>{tok.text}</span>
+              )
+            )
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="min-w-0 rounded-lg border border-clay-200 bg-clay-50/40 p-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-clay-700">
+              Baseline · v{previous.version}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
+              {tokens.filter((t) => t.op !== 'add').map((tok, i) =>
+                tok.op === 'remove' ? (
+                  <del key={i} className="rounded bg-clay-100 px-0.5 text-clay-800 line-through">
+                    {tok.text}
+                  </del>
+                ) : (
+                  <span key={i}>{tok.text}</span>
+                )
+              )}
+              {prevText === '' && <span className="text-xs italic text-faint">Empty</span>}
+            </p>
+          </div>
+          <div className="min-w-0 rounded-lg border border-olive-200 bg-olive-50/40 p-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-olive-700">
+              Revised · v{current.version}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.9] text-stone-800">
+              {tokens.filter((t) => t.op !== 'remove').map((tok, i) =>
+                tok.op === 'add' ? (
+                  <ins key={i} className="rounded bg-olive-100 px-0.5 font-medium text-olive-900 no-underline">
+                    {tok.text}
+                  </ins>
+                ) : (
+                  <span key={i}>{tok.text}</span>
+                )
+              )}
+              {currText === '' && <span className="text-xs italic text-faint">Empty</span>}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

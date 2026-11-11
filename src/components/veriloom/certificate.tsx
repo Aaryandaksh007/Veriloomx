@@ -181,13 +181,18 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
           <Field label="Certificate ID" value={cert.certificateId} />
           <Field label="Channel" value={d.channel} mono={false} />
           <Field label="Approved version" value={`v${d.version} (of ${d.version})`} mono={false} />
-          <Field label="Creator" value={d.creator} mono={false} />
+          <Field label="Author" value={cert.signers?.author || d.creator} mono={false} />
           <Field
             label="Issued"
             value={new Date(cert.issuedAt).toLocaleString(undefined, {
               dateStyle: 'long',
               timeStyle: 'short',
             })}
+            mono={false}
+          />
+          <Field
+            label="Policy baseline"
+            value={`${a.vaultSnapshot?.length ?? 0} versioned Vault clauses verified`}
             mono={false}
           />
         </div>
@@ -292,9 +297,9 @@ function CertificateBody({ cert }: { cert: CertificateData }) {
 
         {/* signatures */}
         <div className="grid gap-6 border-t border-line pt-6 sm:grid-cols-3">
-          <Signature name="Maya Chen" role="Creator" />
-          <Signature name="Dev Kapoor" role="Brand Manager" />
-          <Signature name="Aaryan Sharma" role="Authorised Reviewer" highlight />
+          <Signature name={cert.signers?.author || d.creator} role="Author" />
+          <Signature name={cert.signers?.reviewer ?? 'Direct Approver path'} role="Reviewer" />
+          <Signature name={cert.signers?.approver ?? 'Verified Approver'} role="Approver" highlight />
         </div>
 
         <p className="text-center text-[10px] text-faint">

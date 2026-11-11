@@ -20,16 +20,20 @@ import {
   Layers,
   BadgeCheck,
   ArrowRight,
+  AlertTriangle,
 } from 'lucide-react'
-import { useApp, roleIdentity } from '@/lib/store'
-import type {
-  AuditResult,
-  DraftDTO,
-  Finding,
-  FindingActionDTO,
+import { useApp } from '@/lib/store'
+import {
+  auditHasEngineErrors,
+  PILLAR_META,
+  ROLE_META,
+  type AuditResult,
+  type DraftDTO,
+  type DraftVersionDTO,
+  type Finding,
+  type FindingActionDTO,
 } from '@/lib/types'
-import { auditHasEngineErrors } from '@/lib/types'
-import { PILLAR_META } from '@/lib/types'
+import { selectGoverningAudit } from '@/lib/governance'
 import { CitationCard, SeverityChip, StatusChip, ClauseBadge, ViewHeader } from './shared'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,12 +50,13 @@ import { cn } from '@/lib/utils'
 
 interface DraftDetail {
   draft: DraftDTO
+  versions: DraftVersionDTO[]
   audits: (AuditResult & { actions: FindingActionDTO[] })[]
 }
 
 export function RemediationView() {
-  const { data, selectedDraftId, selectDraft, refresh, role } = useApp()
-  const drafts = (data?.drafts ?? []).filter((d) => d.status !== 'APPROVED' || true)
+  const { data, selectedDraftId, selectDraft, refresh, role, userName, setView } = useApp()
+  const drafts = data?.drafts ?? []
   const selected = drafts.find((d) => d.id === selectedDraftId) ?? null
   const [detail, setDetail] = useState<DraftDetail | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
@@ -71,7 +76,15 @@ export function RemediationView() {
     }
   }, [selected?.id, selected?.version, selected?.status, data?.drafts.length])
 
-  const audit = detail?.audits[0] ?? null
+  const audit = useMemo(() => {
+    if (!selected || !detail) return null
+    return (
+      selectGoverningAudit(selected, detail.audits, detail.versions ?? []) ??
+      detail.audits[0] ??
+      null
+    )
+  }, [selected, detail])
+
   const actionsBy = useMemo(
     () => new Map((audit?.actions ?? []).map((a) => [a.findingKey, a])),
     [audit]
@@ -80,6 +93,30 @@ export function RemediationView() {
   const resolved = findings.filter((f) => actionsBy.has(f.key)).length
   const auditIncomplete = audit ? auditHasEngineErrors(audit.pillars) : false
   const allResolved = resolved === findings.length
+  const canAuthor = role === 'creator'
+  const isCleanAudit = Boolean(audit && !auditIncomplete && findings.length === 0)
+  const alreadyRemediated = Boolean(
+    selected &&
+      audit &&
+      ['REMEDIATED', 'IN_REVIEW', 'APPROVED'].includes(selected.status) &&
+      (audit.version < selected.version || (isCleanAudit && selected.status !== 'AUDITED'))
+  )
+  const needsFreshAudit = Boolean(
+    selected &&
+      audit &&
+      selected.status === 'DRAFT' &&
+      audit.version !== selected.version
+  )
+  const canMutate = Boolean(
+    canAuthor &&
+      selected &&
+      audit &&
+      !auditIncomplete &&
+      !alreadyRemediated &&
+      !needsFreshAudit &&
+      audit.version === selected.version &&
+      ['AUDITED', 'CHANGES_REQUESTED', 'REMEDIATED'].includes(selected.status)
+  )
 
   const reload = async () => {
     if (!selected) return
@@ -167,29 +204,77 @@ export function RemediationView() {
                       <span className="text-stone-400">/{findings.length}</span>
                     </p>
                   </div>
-                  <RemediateButton
-                    draftId={selected.id}
-                    auditId={audit.id}
-                    disabled={!allResolved || auditIncomplete}
-                    disabledReason={
-                      auditIncomplete
-                        ? 'Audit incomplete — rerun the audit'
-                        : !allResolved
-                          ? 'Resolve all findings first'
-                          : undefined
-                    }
-                    onDone={reload}
-                    actor={roleIdentity(role).name}
-                  />
+                  {canAuthor && !alreadyRemediated && (
+                    <RemediateButton
+                      draftId={selected.id}
+                      auditId={audit.id}
+                      clean={isCleanAudit && selected.status === 'AUDITED'}
+                      disabled={!canMutate || (!isCleanAudit && !allResolved)}
+                      disabledReason={
+                        auditIncomplete
+                          ? 'Audit incomplete — recover in Audit Studio'
+                          : needsFreshAudit
+                            ? 'Draft edited — audit current version first'
+                            : !allResolved
+                              ? 'Resolve all findings first'
+                              : undefined
+                      }
+                      onDone={reload}
+                      actor={userName}
+                    />
+                  )}
+                  {alreadyRemediated && (
+                    <Button
+                      size="sm"
+                      className="bg-ink hover:bg-stone-800"
+                      onClick={() => setView(selected.status === 'APPROVED' ? 'certificate' : 'review')}
+                    >
+                      {selected.status === 'APPROVED' ? 'View certificate' : 'Open Review & Approval'}
+                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
                 <motion.div
-                  className="h-full rounded-full bg-terra-500"
-                  animate={{ width: `${findings.length ? (resolved / findings.length) * 100 : 0}%` }}
+                  className={cn(
+                    'h-full rounded-full',
+                    auditIncomplete ? 'bg-clay-400' : 'bg-terra-500'
+                  )}
+                  animate={{
+                    width: `${findings.length ? (resolved / findings.length) * 100 : auditIncomplete ? 0 : 100}%`,
+                  }}
                   transition={{ type: 'spring', stiffness: 120, damping: 20 }}
                 />
               </div>
+              {auditIncomplete && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-clay-300 bg-clay-50 p-3 text-xs text-clay-800">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Incomplete audit — remediation is blocked until failed checks are recovered.
+                  </span>
+                  <Button size="sm" variant="outline" className="h-7 border-clay-300 bg-paper text-xs" onClick={() => setView('audit')}>
+                    Open Audit Studio
+                  </Button>
+                </div>
+              )}
+              {!canAuthor && (
+                <p className="mt-2.5 text-[11px] font-medium text-ink-soft">
+                  Read-only ({ROLE_META[role].label}) — Author access is required to resolve findings or create a remediated version.
+                </p>
+              )}
+              {alreadyRemediated && (
+                <p className="mt-2.5 text-[11px] font-medium text-olive-700">
+                  {isCleanAudit
+                    ? 'Clean audit confirmed — ready for review & approval.'
+                    : `Remediation applied into v${selected.version} (${selected.status}). Decisions below reflect the governing v${audit.version} audit.`}
+                </p>
+              )}
+              {needsFreshAudit && (
+                <p className="mt-2.5 text-[11px] font-medium text-ochre-700">
+                  This draft changed since audit v{audit.version}. Run a fresh 6-pillar audit in Audit Studio before remediating v{selected.version}.
+                </p>
+              )}
             </div>
 
             {/* document */}
@@ -273,15 +358,29 @@ export function RemediationView() {
               action={actionsBy.get(f.key) ?? null}
               active={activeKey === f.key}
               auditId={audit.id}
+              canMutate={canMutate}
               onActivate={() => setActiveKey(f.key)}
               onChanged={reload}
             />
           ))}
-          {findings.length === 0 && (
+          {findings.length === 0 && !auditIncomplete && (
             <div className="rounded-xl border border-olive-200 bg-olive-50/60 p-5 text-center">
               <BadgeCheck className="mx-auto h-7 w-7 text-olive-500" />
               <p className="mt-2 text-xs font-semibold text-olive-800">
-                Zero findings — this draft was clean.
+                Zero findings — all applicable checks completed cleanly.
+              </p>
+              {canMutate && selected.status === 'AUDITED' && (
+                <p className="mt-1 text-[11px] text-olive-700">
+                  Confirm above to mark v{selected.version} ready for review without creating a duplicate version.
+                </p>
+              )}
+            </div>
+          )}
+          {findings.length === 0 && auditIncomplete && (
+            <div className="rounded-xl border border-clay-200 bg-clay-50/60 p-5 text-center">
+              <AlertTriangle className="mx-auto h-7 w-7 text-clay-500" />
+              <p className="mt-2 text-xs font-semibold text-clay-800">
+                Audit incomplete — recover failed checks in Audit Studio first.
               </p>
             </div>
           )}
@@ -368,6 +467,7 @@ function QueuedFinding({
   action,
   active,
   auditId,
+  canMutate,
   onActivate,
   onChanged,
 }: {
@@ -375,10 +475,11 @@ function QueuedFinding({
   action: FindingActionDTO | null
   active: boolean
   auditId: string
+  canMutate: boolean
   onActivate: () => void
   onChanged: () => Promise<void>
 }) {
-  const { role } = useApp()
+  const { role, userName } = useApp()
   const [busy, setBusy] = useState(false)
   const [rewrite, setRewrite] = useState<{ rewrite: string; intentNotes: string | null } | null>(null)
   const [editing, setEditing] = useState(false)
@@ -394,7 +495,7 @@ function QueuedFinding({
         body: JSON.stringify({
           auditId,
           findingKey: finding.key,
-          actor: roleIdentity(role).name,
+          actor: userName,
           actorRole: role,
           ...payload,
         }),
@@ -467,7 +568,15 @@ function QueuedFinding({
         </p>
       )}
 
+      {active && (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-[11.5px] leading-relaxed text-ink-soft">{finding.explanation}</p>
+          <CitationCard finding={finding} compact />
+        </div>
+      )}
+
       {!action ? (
+        canMutate ? (
         <div className="mt-2.5 space-y-2" onClick={(e) => e.stopPropagation()}>
           <div className="flex flex-wrap gap-1.5">
             {finding.suggestion && (
@@ -587,6 +696,9 @@ function QueuedFinding({
             </div>
           )}
         </div>
+        ) : (
+          <p className="mt-2 text-[11px] italic text-faint">Pending Author resolution</p>
+        )
       ) : (
         <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
           <div className="rounded-lg border border-stone-200 bg-parchment p-2">
@@ -599,13 +711,15 @@ function QueuedFinding({
                 : `“${finding.quote}” → “${action.appliedText}”`}
             </p>
           </div>
-          <button
-            onClick={undo}
-            disabled={busy}
-            className="flex items-center gap-1 text-[10.5px] font-semibold text-stone-400 hover:text-stone-700"
-          >
-            <Undo2 className="h-3 w-3" /> revise decision
-          </button>
+          {canMutate && (
+            <button
+              onClick={undo}
+              disabled={busy}
+              className="flex items-center gap-1 text-[10.5px] font-semibold text-stone-400 hover:text-stone-700"
+            >
+              <Undo2 className="h-3 w-3" /> revise decision
+            </button>
+          )}
         </div>
       )}
     </motion.div>
@@ -671,6 +785,7 @@ export function OverrideDialog({
 function RemediateButton({
   draftId,
   auditId,
+  clean,
   disabled,
   disabledReason,
   onDone,
@@ -678,6 +793,7 @@ function RemediateButton({
 }: {
   draftId: string
   auditId: string
+  clean: boolean
   disabled: boolean
   disabledReason?: string
   onDone: () => Promise<void>
@@ -695,14 +811,18 @@ function RemediateButton({
           const res = await fetch('/api/remediate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ draftId, auditId, actor }),
+            body: JSON.stringify({ draftId, auditId, actor, confirmClean: clean }),
           })
           const body = await res.json()
           if (!res.ok) throw new Error(body.error)
           await onDone()
           toast({
-            title: `Remediated version v${body.version} created`,
-            description: `${body.applied} fixes applied · ${body.overrides} override(s) preserved`,
+            title: body.clean
+              ? `Clean audit confirmed (v${body.version})`
+              : `Remediated version v${body.version} created`,
+            description: body.clean
+              ? 'Zero findings across all checks — ready for review.'
+              : `${body.applied} fixes applied · ${body.overrides} override(s) preserved`,
           })
           setView('review')
         } catch (err) {
@@ -713,7 +833,11 @@ function RemediateButton({
       }}
     >
       {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-      {disabled ? disabledReason ?? 'Resolve all findings first' : 'Create remediated version'}
+      {disabled
+        ? disabledReason ?? 'Resolve all findings first'
+        : clean
+          ? 'Confirm clean audit & send to review'
+          : 'Create remediated version'}
     </Button>
   )
 }

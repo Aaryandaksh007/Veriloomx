@@ -26,6 +26,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: v.id,
         version: v.version,
         content: v.content,
+        imageData: v.imageData,
+        imageMeta: v.imageMeta ? JSON.parse(v.imageMeta) : null,
         note: v.note,
         createdAt: v.createdAt.toISOString(),
       })),
@@ -57,6 +59,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       id: v.id,
       version: v.version,
       content: v.content,
+      imageData: v.imageData,
+      imageMeta: v.imageMeta ? JSON.parse(v.imageMeta) : null,
       note: v.note,
       createdAt: v.createdAt.toISOString(),
     })),
@@ -116,24 +120,43 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
   if (typeof body.altText === 'string' && draft.imageMeta) {
     const meta = JSON.parse(draft.imageMeta)
-    meta.altText = body.altText
-    data.imageMeta = JSON.stringify(meta)
-    contentChanged = true
+    if (body.altText !== meta.altText) {
+      meta.altText = body.altText
+      data.imageMeta = JSON.stringify(meta)
+      contentChanged = true
+    }
   }
 
-  // editing content resets the governance state machine
+  // editing content after an audit preserves prior version history and creates a new version to re-audit
+  let createdNewVersion = false
   if (contentChanged && draft.status !== 'DRAFT') {
     data.status = 'DRAFT'
+    data.version = draft.version + 1
+    createdNewVersion = true
   }
 
   const updated = await db.draft.update({ where: { id }, data })
 
   if (contentChanged) {
-    // keep the current version row in sync so diffs stay truthful
-    await db.draftVersion.updateMany({
-      where: { draftId: id, version: draft.version },
-      data: { content: 'content' in data ? String(data.content) : draft.content },
-    })
+    const nextContent = 'content' in data ? String(data.content) : draft.content
+    const nextImageMeta = 'imageMeta' in data ? String(data.imageMeta) : draft.imageMeta
+    if (createdNewVersion) {
+      await db.draftVersion.create({
+        data: {
+          draftId: id,
+          version: updated.version,
+          content: nextContent,
+          imageData: draft.imageData,
+          imageMeta: nextImageMeta,
+          note: 'Edited in Audit Studio',
+        },
+      })
+    } else {
+      await db.draftVersion.updateMany({
+        where: { draftId: id, version: draft.version },
+        data: { content: nextContent, imageMeta: nextImageMeta },
+      })
+    }
     await db.eventLog.create({
       data: {
         draftId: id,
@@ -142,13 +165,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         details: JSON.stringify({
           from: draft.status,
           to: 'DRAFT',
+          version: updated.version,
           reason: 'content edited — re-audit required',
         }),
       },
     })
   }
 
-  return NextResponse.json({ ok: true, status: updated.status })
+  return NextResponse.json({ ok: true, status: updated.status, version: updated.version })
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {

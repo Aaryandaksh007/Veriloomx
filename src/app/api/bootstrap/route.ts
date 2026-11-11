@@ -2,31 +2,82 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ensureSeeded } from '@/lib/seed'
 import { serialiseAudit } from '@/lib/audit/engine'
-import type { DraftDTO, VaultItemDTO } from '@/lib/types'
+import type { DraftDTO, Role, VaultItemDTO } from '@/lib/types'
 import { currentUser } from '@/lib/authorization'
+import { selectWorkspaceAudit } from '@/lib/governance'
 
 export const dynamic = 'force-dynamic'
 
 /** Bootstrap: idempotent seed + full workspace snapshot. */
 export async function GET() {
-  if (!(await currentUser())) {
+  const user = await currentUser()
+  if (!user) {
     return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   }
 
   await ensureSeeded()
 
-  const [vault, drafts, auditRuns, events] = await Promise.all([
+  const [vault, drafts, auditRuns, events, certEvents, activeUsers] = await Promise.all([
     db.vaultItem.findMany({ orderBy: { clauseId: 'asc' } }),
-    db.draft.findMany({ orderBy: { updatedAt: 'desc' } }),
+    db.draft.findMany({
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        versions: {
+          orderBy: { version: 'desc' },
+          select: { version: true, note: true, createdAt: true },
+        },
+      },
+    }),
     db.auditRun.findMany({ orderBy: { createdAt: 'desc' } }),
     db.eventLog.findMany({ orderBy: { createdAt: 'desc' }, take: 40 }),
+    db.eventLog.findMany({
+      where: { action: 'CERT_ISSUED' },
+      orderBy: { createdAt: 'desc' },
+      select: { draftId: true, details: true },
+    }),
+    user.role === 'admin'
+      ? db.user.findMany({ where: { active: true }, select: { role: true } })
+      : Promise.resolve(null),
   ])
 
-  const latestAuditByDraft = new Map<string, ReturnType<typeof serialiseAudit>>()
-  for (const run of auditRuns) {
-    if (!latestAuditByDraft.has(run.draftId)) {
-      latestAuditByDraft.set(run.draftId, serialiseAudit(run, run.draftId))
+  const certifiedByDraft = new Map<string, string>()
+  for (const ev of certEvents) {
+    if (!ev.draftId || certifiedByDraft.has(ev.draftId) || !ev.details) continue
+    try {
+      const parsed = JSON.parse(ev.details) as { auditId?: unknown }
+      if (typeof parsed.auditId === 'string') certifiedByDraft.set(ev.draftId, parsed.auditId)
+    } catch {
+      // ignore malformed event details
     }
+  }
+
+  const runsByDraft = new Map<string, typeof auditRuns>()
+  for (const run of auditRuns) {
+    const list = runsByDraft.get(run.draftId)
+    if (list) list.push(run)
+    else runsByDraft.set(run.draftId, [run])
+  }
+
+  const latestAuditByDraft = new Map<string, ReturnType<typeof serialiseAudit>>()
+  for (const draft of drafts) {
+    const selected = selectWorkspaceAudit(
+      draft,
+      runsByDraft.get(draft.id) ?? [],
+      draft.versions,
+      certifiedByDraft.get(draft.id)
+    )
+    if (selected) {
+      latestAuditByDraft.set(draft.id, serialiseAudit(selected, draft.id))
+    }
+  }
+
+  let teamSummary: { totalUsers: number; roleCounts: Record<Role, number> } | undefined
+  if (activeUsers) {
+    const roleCounts: Record<Role, number> = { creator: 0, manager: 0, reviewer: 0, admin: 0 }
+    for (const u of activeUsers) {
+      if (u.role in roleCounts) roleCounts[u.role as Role]++
+    }
+    teamSummary = { totalUsers: activeUsers.length, roleCounts }
   }
 
   const vaultDTO: VaultItemDTO[] = vault.map((v) => ({
@@ -61,6 +112,7 @@ export async function GET() {
     vault: vaultDTO,
     drafts: draftDTO,
     audits: Object.fromEntries(latestAuditByDraft),
+    teamSummary,
     events: events.map((e) => ({
       id: e.id,
       actor: e.actor,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { auditHasEngineErrors, type PillarSummary } from '@/lib/types'
 import { hasRole } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,24 @@ export async function POST(req: NextRequest) {
 
   const audit = await db.auditRun.findUnique({ where: { id: auditId } })
   if (!audit) return NextResponse.json({ error: 'Audit not found' }, { status: 404 })
+
+  const draft = await db.draft.findUnique({ where: { id: audit.draftId } })
+  if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+  if (draft.status === 'APPROVED') {
+    return NextResponse.json({ error: 'Approved drafts are sealed.' }, { status: 409 })
+  }
+  if (audit.version !== draft.version) {
+    return NextResponse.json(
+      { error: 'Can only resolve findings on the current draft version.' },
+      { status: 409 }
+    )
+  }
+  if (auditHasEngineErrors(JSON.parse(audit.pillarSummaries) as PillarSummary[])) {
+    return NextResponse.json(
+      { error: 'This audit is incomplete because one or more checks failed. Recover or rerun the audit before resolving findings.' },
+      { status: 409 }
+    )
+  }
 
   const findings = JSON.parse(audit.findings) as { key: string }[]
   if (!findings.some((f) => f.key === findingKey)) {
@@ -112,8 +131,18 @@ export async function DELETE(req: NextRequest) {
   if (!auditId || !findingKey) {
     return NextResponse.json({ error: 'auditId and findingKey are required' }, { status: 400 })
   }
-  const existing = await db.findingAction.findFirst({ where: { auditId, findingKey } })
+  const existing = await db.findingAction.findFirst({
+    where: { auditId, findingKey },
+    include: { audit: { select: { draftId: true } } },
+  })
   if (!existing) return NextResponse.json({ ok: true })
+  const draft = await db.draft.findUnique({
+    where: { id: existing.audit.draftId },
+    select: { status: true },
+  })
+  if (draft?.status === 'APPROVED') {
+    return NextResponse.json({ error: 'Approved drafts are sealed.' }, { status: 409 })
+  }
   await db.findingAction.delete({ where: { id: existing.id } })
   return NextResponse.json({ ok: true })
 }

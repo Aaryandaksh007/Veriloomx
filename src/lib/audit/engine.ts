@@ -16,6 +16,7 @@ import type {
   PillarSummary,
 } from '../types'
 import { PILLAR_META } from '../types'
+import { diffVaultSnapshot } from '../vault-lineage'
 import {
   runTerminology,
   runClaimsScan,
@@ -146,7 +147,7 @@ function computeScore(findings: Finding[]): number {
 export async function runAudit(
   draftId: string,
   actor = 'Maya Chen',
-  options: { version?: number } = {}
+  options: { version?: number; retryAuditId?: string } = {}
 ): Promise<AuditResult> {
   const currentDraft = await db.draft.findUnique({ where: { id: draftId } })
   if (!currentDraft) throw new Error('Draft not found')
@@ -172,7 +173,7 @@ export async function runAudit(
       }
     : currentDraft
   if (draft.kind === 'text' && !draft.content.trim()) {
-      throw new Error('The saved text version is empty')
+    throw new Error('The saved text version is empty')
   }
 
   const vault = await db.vaultItem.findMany({ where: { active: true } })
@@ -182,13 +183,61 @@ export async function runAudit(
   const isImage = draft.kind === 'image'
   const imageMeta = parseImageMeta(draft)
 
+  // ── Smart failed-check recovery (retry only errored pillars) ──
+  let reusePrior = false
+  let priorFindings: Finding[] = []
+  let priorPillars = new Map<Pillar, PillarSummary>()
+  const failedPillars = new Set<Pillar>()
+  let recoveryNote: { recoveredFrom: string; retriedPillars: Pillar[] } | null = null
+
+  if (options.retryAuditId) {
+    const prior = await db.auditRun.findUnique({ where: { id: options.retryAuditId } })
+    if (!prior || prior.draftId !== draftId || prior.version !== draft.version) {
+      throw new Error('Original incomplete audit was not found for this draft version')
+    }
+    const parsedPriorPillars = JSON.parse(prior.pillarSummaries) as PillarSummary[]
+    const parsedPriorSnapshot = prior.vaultSnapshot
+      ? (JSON.parse(prior.vaultSnapshot) as { clauseId: string; ruleVer: number }[])
+      : []
+    const vaultDiff = diffVaultSnapshot(parsedPriorSnapshot, vault)
+    for (const p of parsedPriorPillars) {
+      if (p.status === 'error') failedPillars.add(p.pillar)
+      else priorPillars.set(p.pillar, p)
+    }
+    if (failedPillars.size > 0 && !vaultDiff.isStale) {
+      reusePrior = true
+      priorFindings = JSON.parse(prior.findings) as Finding[]
+      const priorLedger = JSON.parse(prior.aiLedger || '[]') as AiLedgerEntry[]
+      for (const entry of priorLedger) {
+        const isToneCall = /tone/i.test(entry.purpose)
+        const isClaimsCall = /claim/i.test(entry.purpose)
+        const isVisionCall = /visual|wcag|contrast|logo/i.test(entry.purpose)
+        if (isToneCall && !failedPillars.has('tone')) ledger.push(entry)
+        else if (isClaimsCall && !failedPillars.has('claims')) ledger.push(entry)
+        else if (
+          isVisionCall &&
+          !failedPillars.has('visual') &&
+          !failedPillars.has('accessibility') &&
+          !failedPillars.has('confidentiality')
+        ) {
+          ledger.push(entry)
+        }
+      }
+      recoveryNote = { recoveredFrom: prior.id, retriedPillars: [...failedPillars] }
+    }
+  }
+  const reusedLedgerCount = ledger.length
+
   // ── Stage A: local confidentiality sandbox (BEFORE any AI call) ──
   let redactedText: string | null = null
   let confFindings: Finding[] = []
 
   if (!isImage) {
     const conf = runConfidentialityText(draft.content, vault)
-    confFindings = conf.findings
+    confFindings =
+      reusePrior && !failedPillars.has('confidentiality')
+        ? priorFindings.filter((f) => f.pillar === 'confidentiality')
+        : conf.findings
     redactedText = conf.redactedText
   }
 
@@ -200,6 +249,12 @@ export async function runAudit(
       // Pillar 2 — deterministic terminology
       (async () => {
         const s = Date.now()
+        if (!isImage && reusePrior && !failedPillars.has('terminology')) {
+          return {
+            findings: priorFindings.filter((f) => f.pillar === 'terminology'),
+            summary: priorPillars.get('terminology')!,
+          }
+        }
         const termItems = vault.filter((v) => v.type === 'TERM')
         const findings = isImage ? [] : runTerminology(draft.content, termItems)
         return {
@@ -218,6 +273,12 @@ export async function runAudit(
       // Pillar 3a — deterministic claims pre-scan
       (async () => {
         const s = Date.now()
+        if (!isImage && reusePrior && !failedPillars.has('claims')) {
+          return {
+            findings: [] as Finding[], // claims findings preserved from prior combined claims findings
+            summary: priorPillars.get('claims')!,
+          }
+        }
         const findings = isImage ? [] : runClaimsScan(draft.content, vault)
         return {
           findings,
@@ -241,6 +302,12 @@ export async function runAudit(
             summary: pillarSummary('tone', [], Date.now() - s, 'Skipped — no text body in visual asset', true),
           }
         }
+        if (reusePrior && !failedPillars.has('tone')) {
+          return {
+            findings: priorFindings.filter((f) => f.pillar === 'tone'),
+            summary: priorPillars.get('tone')!,
+          }
+        }
         const res = await runToneRag(redactedText ?? draft.content, vault, draft.channel)
         ledger.push(...res.ledger)
         suppressed += res.suppressed
@@ -251,7 +318,7 @@ export async function runAudit(
             res.findings,
             Date.now() - s,
             res.parseError
-              ? 'AI response could not be verified — rerun this audit before review'
+              ? 'AI response could not be verified — retry failed checks before review'
               : `${res.findings.length} voice flags grounded in Vault citations${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`,
             false,
             res.parseError
@@ -268,6 +335,12 @@ export async function runAudit(
             summary: pillarSummary('claims', [], Date.now() - s, 'Skipped for visual asset', true),
           }
         }
+        if (reusePrior && !failedPillars.has('claims')) {
+          return {
+            findings: priorFindings.filter((f) => f.pillar === 'claims'),
+            summary: priorPillars.get('claims')!,
+          }
+        }
         const res = await runClaimsRag(redactedText ?? draft.content, vault, draft.channel)
         ledger.push(...res.ledger)
         suppressed += res.suppressed
@@ -278,7 +351,7 @@ export async function runAudit(
             res.findings,
             Date.now() - s,
             res.parseError
-              ? 'AI response could not be verified — deterministic figure scan only; rerun before review'
+              ? 'AI response could not be verified — deterministic figure scan only; retry failed checks before review'
               : `Atomic-claim verification complete${res.suppressed ? `, ${res.suppressed} ungrounded flag(s) suppressed` : ''}`,
             false,
             res.parseError
@@ -297,6 +370,22 @@ export async function runAudit(
             a11ySummary: pillarSummary('accessibility', [], Date.now() - s, 'Skipped — text-only draft', true),
             imageConf: [] as Finding[],
             confSummary: pillarSummary('confidentiality', confFindings, Date.now() - s, 'No text to scrub', true),
+            altSuggestion: null as string | null,
+          }
+        }
+        if (
+          reusePrior &&
+          !failedPillars.has('visual') &&
+          !failedPillars.has('accessibility') &&
+          !failedPillars.has('confidentiality')
+        ) {
+          return {
+            visualFindings: priorFindings.filter((f) => f.pillar === 'visual'),
+            a11yFindings: priorFindings.filter((f) => f.pillar === 'accessibility'),
+            visualSummary: priorPillars.get('visual')!,
+            a11ySummary: priorPillars.get('accessibility')!,
+            imageConf: priorFindings.filter((f) => f.pillar === 'confidentiality'),
+            confSummary: priorPillars.get('confidentiality')!,
             altSuggestion: null as string | null,
           }
         }
@@ -372,7 +461,7 @@ export async function runAudit(
             vs,
             visionAvailable
               ? `ΔE2000 palette distance on ${palette.length} extracted swatches vs ${colorItems.length} brand tokens${visionResult.logoFindings.length ? ' · logo inspection via VLM' : ''}`
-              : `Palette checked with ΔE2000; logo inspection unavailable — rerun before review`,
+              : `ΔE2000 palette checked (${visualFindings.length} palette hit(s)); logo inspection unavailable — retry failed checks before review`,
             false,
             !visionAvailable && Boolean(logoRule)
           ),
@@ -382,7 +471,7 @@ export async function runAudit(
             Date.now() - s,
             visionAvailable
               ? `${visionResult.extractedTexts.length} text regions sampled by VLM · contrast computed with exact WCAG 2.1 luminance math`
-              : 'Image text and contrast could not be verified — rerun before review',
+              : `${a11yFindings.length} alt-text check completed; image text/contrast could not be sampled — retry failed checks before review`,
             false,
             !visionAvailable
           ),
@@ -395,7 +484,7 @@ export async function runAudit(
               ? `${imageConf.length} sensitive token(s) detected in asset text`
               : visionAvailable
                 ? 'No sensitive tokens detected in asset text or alt text'
-                : 'Alt text checked; image text could not be scanned — rerun before review',
+                : 'Alt text checked; in-image OCR text could not be scanned — retry failed checks before review',
             false,
             !visionAvailable
           ),
@@ -475,21 +564,23 @@ export async function runAudit(
     pillars = [
       tone.summary,
       terminology.summary,
-      {
-        ...claimsRag.summary,
-        critical: claimsRag.summary.critical,
-        warning: claimsRag.summary.warning,
-        info: claimsRag.summary.info,
-        durationMs: claimsScan.summary.durationMs + claimsRag.summary.durationMs,
-        status:
-          claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
-            ? 'error'
-            : claimsRag.summary.status,
-        detail:
-          claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
-            ? 'Claims verification incomplete — rerun before review'
-            : `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
-      },
+      reusePrior && !failedPillars.has('claims') && priorPillars.has('claims')
+        ? priorPillars.get('claims')!
+        : {
+            ...claimsRag.summary,
+            critical: claimsRag.summary.critical,
+            warning: claimsRag.summary.warning,
+            info: claimsRag.summary.info,
+            durationMs: claimsScan.summary.durationMs + claimsRag.summary.durationMs,
+            status:
+              claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
+                ? 'error'
+                : claimsRag.summary.status,
+            detail:
+              claimsScan.summary.status === 'error' || claimsRag.summary.status === 'error'
+                ? 'Claims verification incomplete — rerun before review'
+                : `Deterministic figure scan + citation-gated RAG (${mergedClaims.length} unique findings)`,
+          },
       pillarSummary('visual', [], 0, 'Skipped — text-only draft', true),
       pillarSummary('accessibility', [], 0, 'Skipped — text-only draft', true),
       pillarSummary(
@@ -556,15 +647,17 @@ export async function runAudit(
       action: 'AUDIT_RUN',
       details: JSON.stringify({
         auditId: run.id,
+        version: draft.version,
         score,
         findings: allFindings.length,
         suppressed,
         durationMs: totalMs,
+        ...(recoveryNote ?? {}),
       }),
     },
   })
 
-  for (const entry of ledger) {
+  for (const entry of ledger.slice(reusedLedgerCount)) {
     await db.eventLog.create({
       data: {
         draftId,

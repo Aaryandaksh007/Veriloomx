@@ -27,7 +27,7 @@ const NAV: { id: View; label: string; icon: React.ComponentType<{ className?: st
   { id: 'vault', label: 'Brand Vault', icon: LibraryBig, hint: 'Single source of truth' },
   { id: 'audit', label: 'Audit Studio', icon: ScanSearch, hint: '6-pillar pre-flight' },
   { id: 'remediation', label: 'Remediation', icon: WandSparkles, hint: 'Explainable fixes' },
-  { id: 'review', label: 'Review & Approval', icon: ClipboardCheck, hint: 'Demo approval workflow' },
+  { id: 'review', label: 'Review & Approval', icon: ClipboardCheck, hint: 'Role-gated approval workflow' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, hint: 'Blindspot engine' },
   { id: 'certificate', label: 'Certificate', icon: Award, hint: 'Tamper-evident proof' },
 ]
@@ -50,7 +50,7 @@ export function Logo() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
-  const { view, setView, role, setRole, data, refresh, loading } = useApp()
+  const { view, setView, role, setIdentity, setAccountsDialogOpen, data, refresh, loading } = useApp()
 
   useEffect(() => {
     if (!data) void refresh()
@@ -67,10 +67,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const sessionRole = session?.user.role
+    const sessionName = session?.user.name || session?.user.email || undefined
     if (sessionRole && ['creator', 'manager', 'reviewer', 'admin'].includes(sessionRole)) {
-      setRole(sessionRole as Role)
+      setIdentity(sessionRole as Role, sessionName)
     }
-  }, [session?.user.role, setRole])
+  }, [session?.user.role, session?.user.name, session?.user.email, setIdentity])
 
   const identity = roleIdentity(role, session?.user.name || session?.user.email || 'Signed-in user')
   const clauseCount = data?.vault.length ?? 0
@@ -147,11 +148,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* mobile top bar */}
         <div className="border-b border-line bg-parchment px-4 py-3 lg:hidden print:hidden">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <Logo />
-            <div className="text-right">
-              <p className="text-xs font-semibold text-ink">{identity.name}</p>
-              <p className="text-[10px] text-faint">{identity.label}</p>
+            <div className="flex items-center gap-3 text-right">
+              <div>
+                <p className="text-xs font-semibold text-ink">{identity.name}</p>
+                <p className="text-[10px] text-faint">{identity.label}</p>
+              </div>
+              {role === 'admin' && (
+                <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setAccountsDialogOpen(true)}>
+                  Accounts
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-faint" onClick={() => void signOut({ callbackUrl: '/login' })}>
+                Sign out
+              </Button>
             </div>
           </div>
           <nav

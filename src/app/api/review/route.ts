@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { auditHasEngineErrors, type Finding, type PillarSummary } from '@/lib/types'
 import { currentUser } from '@/lib/authorization'
+import { selectGoverningAudit } from '@/lib/governance'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const draft = await db.draft.findUnique({ where: { id: draftId } })
+  const draft = await db.draft.findUnique({
+    where: { id: draftId },
+    include: { versions: { orderBy: { version: 'desc' }, select: { version: true, note: true, createdAt: true } } },
+  })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
 
   const actor = user.name
@@ -51,8 +55,26 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       )
     }
+    const audits = await db.auditRun.findMany({
+      where: { draftId },
+      orderBy: { createdAt: 'desc' },
+      include: { actions: true },
+    })
+    const governing = selectGoverningAudit(draft, audits, draft.versions)
+    if (!governing) {
+      return NextResponse.json(
+        { error: 'No qualifying audit exists for the current version — run the 6-pillar audit first.' },
+        { status: 409 }
+      )
+    }
+    if (auditHasEngineErrors(JSON.parse(governing.pillarSummaries) as PillarSummary[])) {
+      return NextResponse.json(
+        { error: 'Submission is blocked because the current audit has incomplete checks. Recover the failed checks first.' },
+        { status: 409 }
+      )
+    }
     await db.draft.update({ where: { id: draftId }, data: { status: 'IN_REVIEW' } })
-    await logStatus(draftId, draft.status, 'IN_REVIEW', actor, 'Creator submitted for review')
+    await logStatus(draftId, draft.status, 'IN_REVIEW', actor, 'Author submitted for review')
     return NextResponse.json({ ok: true, status: 'IN_REVIEW' })
   }
 
@@ -66,7 +88,7 @@ export async function POST(req: NextRequest) {
     const note = String(body?.note ?? '').trim()
     if (note.length < 10) {
       return NextResponse.json(
-        { error: 'Requesting changes requires a note for the creator (min 10 characters).' },
+        { error: 'Requesting changes requires a note for the author (min 10 characters).' },
         { status: 400 }
       )
     }
@@ -86,26 +108,21 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // the latest audit is the one the remediation was derived from;
-  // the state machine guarantees no content edits since (edits reset to DRAFT)
-  const audit = await db.auditRun.findFirst({
+  // Match the governing audit for this draft (either direct on current version or
+  // pre-remediation v(V-1) audit that produced remediated vV; ignores historical v1 re-audits)
+  const audits = await db.auditRun.findMany({
     where: { draftId },
     orderBy: { createdAt: 'desc' },
     include: { actions: true },
   })
+  const audit = selectGoverningAudit(draft, audits, draft.versions)
   if (!audit) {
     return NextResponse.json(
-      { error: 'No audit exists for the current version — run the 6-pillar audit first.' },
+      { error: 'No qualifying audit exists for the current version — run the 6-pillar audit first.' },
       { status: 409 }
     )
   }
 
-  if (audit.version !== draft.version) {
-    return NextResponse.json(
-      { error: 'The latest audit does not match the current draft version. Rerun the audit before approval.' },
-      { status: 409 }
-    )
-  }
   if (auditHasEngineErrors(JSON.parse(audit.pillarSummaries) as PillarSummary[])) {
     return NextResponse.json(
       { error: 'Approval is blocked because one or more audit checks failed. Rerun the audit before sign-off.' },

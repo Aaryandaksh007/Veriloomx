@@ -21,7 +21,8 @@ import {
   WandSparkles,
   Zap,
 } from 'lucide-react'
-import { useApp, roleIdentity } from '@/lib/store'
+import { useApp } from '@/lib/store'
+import { ROLE_META } from '@/lib/types'
 import { liveScan, LIVE_KIND_META, type LiveHit } from '@/lib/live-check'
 import { LiveTextarea, LiveStatusStrip } from './live-editor'
 import { ClauseBadge } from './shared'
@@ -103,7 +104,7 @@ export function LivePlayground({
   requestedSample: string | null
   onSampleLoaded: () => void
 }) {
-  const { data, refresh, role, selectDraft, setAutoAudit } = useApp()
+  const { data, refresh, role, userName, selectDraft, setAutoAudit } = useApp()
   const [text, setText] = useState('')
   const [activeSample, setActiveSample] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -141,7 +142,7 @@ export function LivePlayground({
           channel: sample ? sample.channel : 'LinkedIn',
           kind: 'text',
           content: text,
-          creator: roleIdentity(role).name,
+          creator: userName,
         }),
       })
       const body = await res.json()
@@ -236,24 +237,32 @@ export function LivePlayground({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button
-              onClick={runFullAudit}
-              disabled={!text.trim() || busy}
-              size="lg"
-              className="bg-terra-500 hover:bg-terra-600"
-            >
-              {busy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="mr-2 h-4 w-4" />
-              )}
-              Run the full 6-Pillar Audit
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Button>
-            <p className="text-[11px] leading-snug text-faint">
-              Creates a draft in your workspace and runs the complete engine —
-              tone, terminology, claims, visual, accessibility, confidentiality.
-            </p>
+            {role === 'creator' ? (
+              <>
+                <Button
+                  onClick={runFullAudit}
+                  disabled={!text.trim() || busy}
+                  size="lg"
+                  className="bg-terra-500 hover:bg-terra-600"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="mr-2 h-4 w-4" />
+                  )}
+                  Run the full 6-Pillar Audit
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+                <p className="text-[11px] leading-snug text-faint">
+                  Creates a draft in your workspace and runs the complete engine —
+                  tone, terminology, claims, visual, accessibility, confidentiality.
+                </p>
+              </>
+            ) : (
+              <p className="rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink-soft">
+                Signed in as <span className="font-semibold text-ink">{ROLE_META[role].label}</span>. Instant in-browser scanning works for any role; creating workspace drafts and running server audits requires an Author account.
+              </p>
+            )}
           </div>
         </div>
 

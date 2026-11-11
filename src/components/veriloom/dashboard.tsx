@@ -20,10 +20,12 @@ import {
   Play,
   ScanSearch,
   ShieldCheck,
+  Users,
   Zap,
 } from 'lucide-react'
 import { useApp, roleIdentity, type View } from '@/lib/store'
-import type { AuditResult, DraftDTO } from '@/lib/types'
+import { auditHasEngineErrors, ROLE_META, type AuditResult, type DraftDTO, type Role, type VaultItemDTO } from '@/lib/types'
+import { diffVaultSnapshot } from '@/lib/vault-lineage'
 import { AnimatedNumber, EngineChip, StatusChip, timeAgo } from './shared'
 import { ProblemSection, type FailureId } from './problem-section'
 import { LivePlayground } from './live-playground'
@@ -73,12 +75,12 @@ const NEXT_HINT: Record<string, string> = {
   draft: 'Submit it for a 6-pillar audit',
   audit: 'Run the audit in Audit Studio',
   fix: 'Apply the cited fixes in Remediation',
-  review: 'Await approval in the demo review flow',
+  review: 'Ready for role-gated review & sign-off',
   live: 'Approved — certificate available',
 }
 
 export function DashboardView() {
-  const { data, setView, selectDraft, role } = useApp()
+  const { data, setView, selectDraft, role, userName, setAccountsDialogOpen } = useApp()
   const [requestedPlaygroundSample, setRequestedPlaygroundSample] = useState<string | null>(null)
   const clearRequestedPlaygroundSample = useCallback(
     () => setRequestedPlaygroundSample(null),
@@ -96,6 +98,14 @@ export function DashboardView() {
     data?.drafts.find((d) => d.title.includes('Press release')) ??
     data?.drafts.find((d) => d.status !== 'APPROVED') ??
     data?.drafts[0]
+
+  const teamSummary = data?.teamSummary
+  const missingWorkflowRoles: Role[] =
+    role === 'admin' && teamSummary
+      ? (['creator', 'manager', 'reviewer'] as Role[]).filter(
+          (r) => (teamSummary.roleCounts[r] ?? 0) === 0
+        )
+      : []
 
   const tryFailure = (failureId: FailureId) => {
     if (failureId === 'facts' || failureId === 'tone') {
@@ -124,7 +134,9 @@ export function DashboardView() {
         inFlight={inFlight}
         findings={totalFindings}
         suppressed={totalSuppressed}
-        roleLabel={roleIdentity(role).label}
+        role={role}
+        userName={userName}
+        roleLabel={roleIdentity(role, userName).label}
         onTryLive={() => {
           document
             .getElementById('live-playground')
@@ -144,6 +156,31 @@ export function DashboardView() {
           else setView('audit')
         }}
       />
+
+      {role === 'admin' && missingWorkflowRoles.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-terra-200 bg-terra-50/70 px-5 py-3.5">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-ink">
+              Provision team roles to complete the multi-user workflow
+            </p>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              Active accounts missing for:{' '}
+              <span className="font-semibold text-terra-800">
+                {missingWorkflowRoles.map((r) => ROLE_META[r].label).join(', ')}
+              </span>
+              . Create separate accounts so each gate is exercised by its assigned role.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-terra-600 text-cream hover:bg-terra-500"
+            onClick={() => setAccountsDialogOpen(true)}
+          >
+            <Users className="mr-1.5 h-3.5 w-3.5" />
+            Manage workspace accounts
+          </Button>
+        </div>
+      )}
 
       {/* ── 2 · The concrete problem + proof path ──────── */}
       <ProblemSection onTryFailure={tryFailure} />
@@ -218,6 +255,8 @@ function CommandBar({
   inFlight,
   findings,
   suppressed,
+  role,
+  userName,
   roleLabel,
   onTryLive,
   onDemoAudit,
@@ -226,6 +265,8 @@ function CommandBar({
   inFlight: number
   findings: number
   suppressed: number
+  role: Role
+  userName: string
   roleLabel: string
   onTryLive: () => void
   onDemoAudit: () => void
@@ -322,7 +363,7 @@ function CommandBar({
       {/* hairline role bar */}
       <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-parchment/60 px-5 py-2.5 sm:px-7">
         <p className="truncate text-[11px] text-ink-soft">
-          Viewing as <span className="font-semibold text-ink">{roleLabel}</span> — switch the demo role to preview how approval permissions change.
+          Signed in as <span className="font-semibold text-ink">{userName}</span> ({roleLabel}) — {ROLE_META[role].desc}. Actions across VeriLoom reflect your verified permissions.
         </p>
       </div>
     </motion.section>
@@ -365,6 +406,7 @@ function PipelineBoard() {
                 key={d.id}
                 draft={d}
                 audit={data?.audits[d.id]}
+                vault={data?.vault ?? []}
                 index={i}
               />
             ))}
@@ -376,13 +418,17 @@ function PipelineBoard() {
 function PipelineCard({
   draft,
   audit,
+  vault,
   index,
 }: {
   draft: DraftDTO
   audit?: AuditResult
+  vault: VaultItemDTO[]
   index: number
 }) {
   const { selectDraft } = useApp()
+  const incomplete = audit ? auditHasEngineErrors(audit.pillars) : false
+  const vaultDrift = audit ? diffVaultSnapshot(audit.vaultSnapshot, vault) : null
 
   const stages = RAIL_STAGES.map((s) => ({
     ...s,
@@ -451,6 +497,22 @@ function PipelineCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {audit && incomplete && (
+            <span
+              className="rounded-md border border-clay-300 bg-clay-50 px-1.5 py-0.5 text-[10.5px] font-bold text-clay-700"
+              title="One or more checks failed — recover before remediation or approval"
+            >
+              Incomplete
+            </span>
+          )}
+          {audit && !incomplete && !approved && vaultDrift?.isStale && (
+            <span
+              className="rounded-md border border-ochre-300 bg-ochre-50 px-1.5 py-0.5 text-[10.5px] font-bold text-ochre-700"
+              title="Vault rules changed since this audit ran"
+            >
+              Rules updated
+            </span>
+          )}
           {audit && approved ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-olive-200 bg-olive-50 px-1.5 py-0.5 text-[11px] font-bold text-olive-700"
@@ -463,9 +525,9 @@ function PipelineCard({
             <span
               className={cn(
                 'rounded-md border px-1.5 py-0.5 text-[11px] font-bold tabular-nums',
-                scoreTone
+                incomplete ? 'border-clay-300 bg-clay-50 text-clay-700' : scoreTone
               )}
-              title={`Latest audit score ${audit.score}/100`}
+              title={incomplete ? `Provisional score ${audit.score}/100 (checks incomplete)` : `Latest audit score ${audit.score}/100`}
             >
               {audit.score}
             </span>
@@ -563,14 +625,14 @@ const STEPS: {
   {
     n: 1,
     title: 'Brand Vault Onboarding',
-    actor: 'Brand Manager',
-    desc: 'Voice rules, verified facts, terminology, colour tokens & assets indexed with unique clause IDs — the single source of truth every flag must cite.',
+    actor: 'Administrator',
+    desc: 'Voice rules, verified facts, terminology, colour tokens & assets versioned with unique clause IDs — the single source of truth every flag must cite.',
     view: 'vault',
   },
   {
     n: 2,
     title: 'Multi-Format Submission',
-    actor: 'Creator',
+    actor: 'Author',
     desc: 'Text, Markdown, PNG/JPG visuals — with target channel selection. Submitting from the dashboard lands you here with the draft pre-selected.',
     view: 'audit',
   },
@@ -578,21 +640,21 @@ const STEPS: {
     n: 3,
     title: 'Parallel 6-Pillar Audit',
     actor: 'VeriLoom Engine',
-    desc: 'Deterministic math (ΔE2000, WCAG 2.1) + citation-gated RAG run simultaneously — ungrounded AI flags are suppressed before a human ever sees them.',
+    desc: 'Deterministic math (ΔE2000, WCAG 2.1) + citation-gated RAG run simultaneously — incomplete checks fail closed and ungrounded AI flags are suppressed.',
     view: 'audit',
   },
   {
     n: 4,
     title: 'Explainable Remediation',
-    actor: 'Creator',
+    actor: 'Author',
     desc: 'Every flag cites its clause. Accept surgical fixes or override with a written justification that flows into the Blindspot Engine.',
     view: 'remediation',
   },
   {
     n: 5,
     title: 'Role-Based Sign-Off',
-    actor: 'Manager → Reviewer',
-    desc: 'Side-by-side diffs, threaded comments and a simulated approval state machine. Managers pre-screen; only the Authorised Reviewer role can sign off.',
+    actor: 'Reviewer → Approver',
+    desc: 'Word-level version diffs, threaded comments, and a server-enforced state machine. Reviewers request changes; only an authenticated Approver can sign off.',
     view: 'review',
   },
   {
