@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -12,6 +13,9 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [setupRequired, setSetupRequired] = useState(false)
   const [sessionNotice, setSessionNotice] = useState(false)
+  const [demoCredentials, setDemoCredentials] = useState<{ email: string; password: string } | null>(null)
+  const [demoError, setDemoError] = useState('')
+  const [demoFilled, setDemoFilled] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -25,6 +29,33 @@ export default function LoginPage() {
         setSetupRequired(Boolean(data.setupRequired && data.setupAvailable))
       })
       .catch(() => setError('Could not check workspace setup. Refresh to try again.'))
+
+    let active = true
+    fetch('/api/demo-login', { cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(
+            typeof data.error === 'string' ? data.error : 'Could not load demo sign-in.'
+          )
+        }
+        if (data.available && typeof data.email === 'string' && typeof data.password === 'string') {
+          if (active) setDemoCredentials({ email: data.email, password: data.password })
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setDemoError(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not load demo sign-in. Use your assigned workspace account.'
+          )
+        }
+      })
+
+    return () => {
+      active = false
+    }
   }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -65,13 +96,64 @@ export default function LoginPage() {
               Your session ended or access was updated. Sign in again to continue.
             </p>
           )}
+          {demoCredentials && (
+            <div className="rounded-lg border border-line bg-parchment/70 p-3">
+              <p className="text-xs leading-relaxed text-ink-soft">
+                Shared demo Author account. Actions are visible to other judges using this account.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 w-full"
+                disabled={busy}
+                onClick={() => {
+                  setEmail(demoCredentials.email)
+                  setPassword(demoCredentials.password)
+                  setError('')
+                  setDemoFilled(true)
+                }}
+              >
+                Fill demo credentials
+              </Button>
+              {demoFilled && (
+                <p role="status" className="mt-2 text-center text-xs text-olive-700">
+                  Demo credentials filled. Select Sign in to continue.
+                </p>
+              )}
+            </div>
+          )}
+          {demoError && (
+            <p role="alert" className="text-xs text-clay-700">
+              {demoError}
+            </p>
+          )}
           <label className="block text-sm font-medium text-ink">
             Email
-            <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2" />
+            <input
+              required
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setDemoFilled(false)
+              }}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+            />
           </label>
           <label className="block text-sm font-medium text-ink">
             Password
-            <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2" />
+            <input
+              required
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                setDemoFilled(false)
+              }}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+            />
           </label>
           {error && <p role="alert" className="text-sm text-clay-700">{error}</p>}
           <button disabled={busy} className="w-full rounded-md bg-terra-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-terra-500 disabled:opacity-60">

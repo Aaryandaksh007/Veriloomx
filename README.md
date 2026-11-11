@@ -45,6 +45,9 @@ Requirements: [Git](https://git-scm.com/), [Bun](https://bun.sh/), Python 3, Pos
    GEMINI_API_KEY=your-google-ai-studio-key
    GEMINI_MODEL=gemini-3.8-flash
    GEMINI_VISION_MODEL=gemini-3.8-flash
+   DEMO_LOGIN_ENABLED=false
+   DEMO_LOGIN_EMAIL=
+   DEMO_LOGIN_PASSWORD=
    ```
 
    The example URLs are templates: replace them with your provider's pooled (`DATABASE_URL`) and direct (`DIRECT_URL`) PostgreSQL URLs; for local PostgreSQL, both can use the same URL. Generate two different random values for `NEXTAUTH_SECRET` and `INITIAL_ADMIN_SETUP_KEY` (for example, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` twice). URL-encode special characters in database credentials. `.env` is ignored by Git; never commit secrets.
@@ -68,8 +71,21 @@ Import the GitHub repository into Vercel and add these environment variables for
 - `INITIAL_ADMIN_SETUP_KEY`: a one-time bootstrap secret; remove after the first administrator has been created.
 - `GEMINI_API_KEY`: your server-side Google AI Studio key.
 - `GEMINI_MODEL` and `GEMINI_VISION_MODEL`: optional; default to `gemini-3.8-flash`.
+- `DEMO_LOGIN_ENABLED`, `DEMO_LOGIN_EMAIL`, and `DEMO_LOGIN_PASSWORD`: optional; enable the shared judge login only after creating a dedicated Author account.
 
 Vercel runs the checked-in Prisma migrations during each build. Do not use a local-only PostgreSQL instance or expose its port to the internet for deployment. pgAdmin can connect to Neon for administration, but it does not host the database. Keep database and Gemini secrets in Vercel's project environment settings, not in source files.
+
+### Optional judge demo login
+
+The sign-in page can fill a shared demo Author account for judges. First create a dedicated **Author** account from **Manage accounts**, then configure these server-side environment variables and redeploy:
+
+```env
+DEMO_LOGIN_ENABLED=true
+DEMO_LOGIN_EMAIL=demo-author@example.com
+DEMO_LOGIN_PASSWORD=<that-account's-password>
+```
+
+The app only offers the button when the configured password matches an active Author account. These credentials are intentionally disclosed to every visitor when this feature is enabled. Use a disposable demo deployment and data, never an administrator or real employee account, and disable the feature after judging. Anyone using the shared account can see or change its drafts, and audit actions may consume your Gemini quota.
 
 ## Golden walkthrough
 
