@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { auditHasEngineErrors, type Finding, type PillarSummary } from '@/lib/types'
+import { currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
 type ReviewAction = 'submit' | 'request-changes' | 'approve'
 
-const ACTION_ROLES: Record<ReviewAction, string[]> = {
-  submit: ['creator'],
-  'request-changes': ['manager'],
-  approve: ['reviewer'],
+const ACTION_ROLES: Record<ReviewAction, string> = {
+  submit: 'creator',
+  'request-changes': 'manager',
+  approve: 'reviewer',
 }
 
 /**
@@ -23,14 +24,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   const draftId = String(body?.draftId ?? '')
   const action = String(body?.action ?? '') as ReviewAction
-  const role = String(body?.role ?? '')
+  const user = await currentUser()
+  if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
+  const role = user.role
   if (!draftId || !['submit', 'request-changes', 'approve'].includes(action)) {
     return NextResponse.json({ error: 'draftId and a valid action are required' }, { status: 400 })
   }
-  if (!ACTION_ROLES[action].includes(role)) {
+  if (ACTION_ROLES[action] !== role) {
     return NextResponse.json(
       {
-        error: `Demo workflow: "${action}" is reserved for ${ACTION_ROLES[action].join(', ')}. You are acting as ${role}.`,
+        error: `"${action}" requires the ${ACTION_ROLES[action]} role. Your account is ${role}.`,
       },
       { status: 403 }
     )
@@ -39,8 +42,7 @@ export async function POST(req: NextRequest) {
   const draft = await db.draft.findUnique({ where: { id: draftId } })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
 
-  const actor =
-    role === 'creator' ? 'Maya Chen' : role === 'manager' ? 'Dev Kapoor' : 'Aaryan Sharma'
+  const actor = user.name
 
   if (action === 'submit') {
     if (draft.status !== 'REMEDIATED') {
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
     await db.draft.update({ where: { id: draftId }, data: { status: 'CHANGES_REQUESTED' } })
     await db.comment.create({
-      data: { draftId, author: actor, role: 'manager', body: `🔁 Changes requested: ${note}` },
+      data: { draftId, author: actor, role, body: `Changes requested: ${note}` },
     })
     await logStatus(draftId, draft.status, 'CHANGES_REQUESTED', actor, note)
     return NextResponse.json({ ok: true, status: 'CHANGES_REQUESTED' })

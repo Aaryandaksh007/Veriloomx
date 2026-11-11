@@ -3,11 +3,16 @@ import { db } from '@/lib/db'
 import { ensureSeeded } from '@/lib/seed'
 import { serialiseAudit } from '@/lib/audit/engine'
 import type { DraftDTO, VaultItemDTO } from '@/lib/types'
+import { currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
 /** Bootstrap: idempotent seed + full workspace snapshot. */
 export async function GET() {
+  if (!(await currentUser())) {
+    return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
+  }
+
   await ensureSeeded()
 
   const [vault, drafts, auditRuns, events] = await Promise.all([
@@ -32,6 +37,7 @@ export async function GET() {
     content: v.content,
     extra: v.extra ? JSON.parse(v.extra) : null,
     active: v.active,
+    ruleVer: v.ruleVer,
     createdAt: v.createdAt.toISOString(),
     updatedAt: v.updatedAt.toISOString(),
   }))

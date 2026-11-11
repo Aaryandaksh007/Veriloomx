@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  if (!(await currentUser())) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const draftId = req.nextUrl.searchParams.get('draftId')
   if (!draftId) return NextResponse.json({ error: 'draftId is required' }, { status: 400 })
 
@@ -24,6 +26,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await currentUser()
+  if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const body = await req.json().catch(() => null)
   const draftId = String(body?.draftId ?? '')
   const text = String(body?.body ?? '').trim()
@@ -37,8 +41,8 @@ export async function POST(req: NextRequest) {
   const comment = await db.comment.create({
     data: {
       draftId,
-      author: String(body?.author ?? 'Maya Chen'),
-      role: String(body?.role ?? 'creator'),
+      author: user.name,
+      role: user.role,
       body: text,
     },
   })

@@ -28,7 +28,24 @@ import { runVisualPalette, runImageVlm } from './image'
 function parseImageMeta(draft: Draft): ImageMeta | null {
   if (!draft.imageMeta) return null
   try {
-    return JSON.parse(draft.imageMeta) as ImageMeta
+    const parsed = JSON.parse(draft.imageMeta) as Partial<ImageMeta>
+    if (
+      typeof parsed.altText !== 'string' ||
+      !Array.isArray(parsed.palette) ||
+      parsed.palette.length === 0 ||
+      !parsed.palette.every(
+        (swatch) =>
+          /^#[0-9a-f]{6}$/i.test(swatch.hex) &&
+          Number.isFinite(swatch.ratio) &&
+          swatch.ratio >= 0
+      ) ||
+      typeof parsed.width !== 'number' ||
+      typeof parsed.height !== 'number' ||
+      typeof parsed.fileName !== 'string'
+    ) {
+      return null
+    }
+    return parsed as ImageMeta
   } catch {
     return null
   }
@@ -126,9 +143,37 @@ function computeScore(findings: Finding[]): number {
   return Math.max(0, score)
 }
 
-export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<AuditResult> {
-  const draft = await db.draft.findUnique({ where: { id: draftId } })
-  if (!draft) throw new Error('Draft not found')
+export async function runAudit(
+  draftId: string,
+  actor = 'Maya Chen',
+  options: { version?: number } = {}
+): Promise<AuditResult> {
+  const currentDraft = await db.draft.findUnique({ where: { id: draftId } })
+  if (!currentDraft) throw new Error('Draft not found')
+  const requestedVersion = options.version ?? currentDraft.version
+  if (!Number.isInteger(requestedVersion) || requestedVersion < 1 || requestedVersion > currentDraft.version) {
+    throw new Error('Draft version is invalid')
+  }
+  const snapshot = requestedVersion === currentDraft.version
+    ? null
+    : await db.draftVersion.findUnique({
+        where: { draftId_version: { draftId, version: requestedVersion } },
+      })
+  if (requestedVersion !== currentDraft.version && !snapshot) {
+    throw new Error('Draft version not found')
+  }
+  const draft = snapshot
+    ? {
+        ...currentDraft,
+        version: requestedVersion,
+        content: snapshot.content,
+        imageData: snapshot.imageData,
+        imageMeta: snapshot.imageMeta,
+      }
+    : currentDraft
+  if (draft.kind === 'text' && !draft.content.trim()) {
+      throw new Error('The saved text version is empty')
+  }
 
   const vault = await db.vaultItem.findMany({ where: { active: true } })
   const ledger: AiLedgerEntry[] = []
@@ -244,7 +289,7 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
       // Pillar 4 + 5 + 6 — image pipeline
       (async () => {
         const s = Date.now()
-        if (!isImage || !draft.imageData) {
+        if (!isImage) {
           return {
             visualFindings: [] as Finding[],
             a11yFindings: [] as Finding[],
@@ -255,7 +300,10 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
             altSuggestion: null as string | null,
           }
         }
-        const palette = imageMeta?.palette ?? []
+        if (!draft.imageData || !imageMeta) {
+          throw new Error('Image asset or validated image metadata is missing')
+        }
+        const palette = imageMeta.palette
 
         // Pillar 4 — deterministic CIELAB ΔE2000
         const colorItems = vault.filter((v) => v.type === 'COLOR')
@@ -497,6 +545,7 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
       suppressed,
       redactedPreview: redactedText,
       aiLedger: JSON.stringify(ledger),
+      vaultSnapshot: JSON.stringify(vault.map(({ clauseId, ruleVer }) => ({ clauseId, ruleVer }))),
     },
   })
 
@@ -526,7 +575,7 @@ export async function runAudit(draftId: string, actor = 'Maya Chen'): Promise<Au
     })
   }
 
-  if (['DRAFT', 'CHANGES_REQUESTED'].includes(draft.status)) {
+  if (draft.version === currentDraft.version && ['DRAFT', 'CHANGES_REQUESTED'].includes(draft.status)) {
     await db.draft.update({ where: { id: draftId }, data: { status: 'AUDITED' } })
   }
 
@@ -544,6 +593,9 @@ export function serialiseAudit(run: AuditRun, draftId: string): AuditResult {
     suppressed: run.suppressed,
     redactedPreview: run.redactedPreview,
     aiLedger: JSON.parse(run.aiLedger || '[]') as AiLedgerEntry[],
+    vaultSnapshot: run.vaultSnapshot
+      ? JSON.parse(run.vaultSnapshot) as { clauseId: string; ruleVer: number }[]
+      : [],
     createdAt: run.createdAt.toISOString(),
   }
 }

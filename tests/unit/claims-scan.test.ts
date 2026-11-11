@@ -19,6 +19,7 @@ function vaultItem(
     content,
     extra: JSON.stringify({ figures }),
     active: true,
+    ruleVer: 1,
     createdAt: new Date(0),
     updatedAt: new Date(0),
   }
@@ -41,6 +42,7 @@ describe('deterministic claims scan', () => {
       content: item.content,
       extra: { figures },
       active: true,
+      ruleVer: 1,
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
     }
@@ -58,6 +60,12 @@ describe('deterministic claims scan', () => {
 
   it('does not flag an approved price', () => {
     assert.equal(runClaimsScan('The Starter plan costs $29 per user each month.', [pricing]).length, 0)
+  })
+
+  it('ignores year-only references that are not commercial claims', () => {
+    assert.equal(runClaimsScan('This product launched in 2025 and ships in 2026.', [pricing]).length, 0)
+    const result = liveScan('This product launched in 2025 and ships in 2026.', [])
+    assert.equal(result.hits.filter((hit) => hit.kind === 'figure').length, 0)
   })
 
   it('only suggests a replacement when the approved fact has one unambiguous value', () => {

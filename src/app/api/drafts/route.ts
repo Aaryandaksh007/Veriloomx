@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { hasRole, currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  if (!(await currentUser())) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const drafts = await db.draft.findMany({ orderBy: { updatedAt: 'desc' } })
   return NextResponse.json({
     drafts: drafts.map((d) => ({
@@ -24,6 +26,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await hasRole('creator')
+  if (!user) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Image drafts need an image' }, { status: 400 })
   }
 
-  const creator = String(body.creator ?? 'Maya Chen')
+  const creator = user.name
 
   const draft = await db.draft.create({
     data: {
@@ -55,7 +59,14 @@ export async function POST(req: NextRequest) {
   })
 
   await db.draftVersion.create({
-    data: { draftId: draft.id, version: 1, content, note: 'Original submission' },
+    data: {
+      draftId: draft.id,
+      version: 1,
+      content,
+      imageData: draft.imageData,
+      imageMeta: draft.imageMeta,
+      note: 'Original submission',
+    },
   })
 
   await db.eventLog.create({

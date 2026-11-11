@@ -2,7 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────
 // VeriLoom AI — Role-Based Review & Approval
-// Simulated role gates, version diffs, threaded comments, state machine.
+// Authenticated role gates, version diffs, threaded comments, state machine.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import {
@@ -123,7 +123,7 @@ export function ReviewView() {
       <ViewHeader
         crumb="Review & Approval"
         title="Review & Approval"
-        subtitle="Side-by-side diffs, threaded comments and a simulated approval workflow — managers pre-screen, only the Authorised Reviewer role can sign off."
+        subtitle="Side-by-side diffs, threaded comments and role-enforced approvals — reviewers request changes, and authorised approvers sign off."
       />
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
       {/* draft list */}

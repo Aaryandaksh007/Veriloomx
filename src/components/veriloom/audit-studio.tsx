@@ -23,6 +23,8 @@ import {
   Send,
   Upload,
   CircleDot,
+  History,
+  RotateCcw,
 } from 'lucide-react'
 import { useApp, roleIdentity } from '@/lib/store'
 import { liveScan } from '@/lib/live-check'
@@ -36,7 +38,15 @@ import {
   type ImageMeta,
   type Pillar,
   type PillarSummary,
+  type DraftVersionDTO,
 } from '@/lib/types'
+
+interface AuditLineageEntry {
+  id: string
+  version: number
+  createdAt: string
+  vaultSnapshot: { clauseId: string; ruleVer: number }[]
+}
 import { extractPaletteFromPixels } from '@/lib/palette'
 import {
   ClauseBadge,
@@ -91,7 +101,7 @@ export function AuditStudioView() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-stone-500">
             Drafts
           </h2>
-          <NewDraftButton />
+          {role === 'creator' && <NewDraftButton />}
         </div>
         <div className="max-h-[calc(100vh-220px)] space-y-2 overflow-y-auto pr-1 vl-scroll">
           {drafts.map((d) => (
@@ -172,6 +182,8 @@ function DraftPanel({
   const [content, setContent] = useState(draft.content)
   const [altText, setAltText] = useState(draft.imageMeta?.altText ?? '')
   const [showRedacted, setShowRedacted] = useState(false)
+  const [versions, setVersions] = useState<DraftVersionDTO[]>([])
+  const [auditHistory, setAuditHistory] = useState<AuditLineageEntry[]>([])
   const runToken = useRef(0)
   const autoRunDone = useRef<string | null>(null)
 
@@ -179,6 +191,18 @@ function DraftPanel({
     setResult(audit)
     setContent(draft.content)
     setAltText(draft.imageMeta?.altText ?? '')
+    let cancelled = false
+    void Promise.all([
+      fetch(`/api/drafts/${draft.id}?versions=1`, { cache: 'no-store' }).then((res) => res.ok ? res.json() : null),
+      fetch(`/api/audit?draftId=${encodeURIComponent(draft.id)}&history=1`, { cache: 'no-store' }).then((res) => res.ok ? res.json() : null),
+    ]).then(([detail, history]) => {
+      if (cancelled) return
+      if (detail) setVersions(detail.versions ?? [])
+      if (history) setAuditHistory(history.audits ?? [])
+    }).catch((error) => {
+      console.error('[audit-studio] failed to load version history:', error)
+    })
+    return () => { cancelled = true }
   }, [draft.id, draft.version, draft.content, audit])
 
   const dirty =
@@ -199,7 +223,7 @@ function DraftPanel({
     return true
   }
 
-  const runAudit = async () => {
+  const runAudit = async (version?: number) => {
     if (dirty) {
       const ok = await saveEdits()
       if (!ok) return
@@ -218,7 +242,7 @@ function DraftPanel({
       const res = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftId: draft.id, actor }),
+        body: JSON.stringify({ draftId: draft.id, version, actor }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Audit failed')
@@ -228,6 +252,12 @@ function DraftPanel({
       // small delay so the last pillar animation completes
       await new Promise((r) => setTimeout(r, 450))
       setResult(body.audit as AuditResult)
+      setAuditHistory((history) => [{
+        id: body.audit.id,
+        version: body.audit.version,
+        createdAt: body.audit.createdAt,
+        vaultSnapshot: body.audit.vaultSnapshot,
+      }, ...history.filter((run) => run.id !== body.audit.id)])
       await onAuditDone()
       toast({
         title: `Audit complete — compliance score ${body.audit.score}/100`,
@@ -282,6 +312,26 @@ function DraftPanel({
                 {draft.channel} · v{draft.version} · {draft.creator}
               </span>
             </div>
+            {versions.length > 0 && auditHistory.length > 0 && (
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink">
+                  <History className="h-3.5 w-3.5" /> Re-audit a saved draft version with current Vault rules
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {versions.slice().sort((a, b) => b.version - a.version).map((version) => (
+                    <Button
+                      key={version.id}
+                      variant="outline"
+                      size="sm"
+                      disabled={running || draft.status === 'APPROVED' && version.version === draft.version}
+                      onClick={() => runAudit(version.version)}
+                    >
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Audit v{version.version}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
             <h1 className="mt-1.5 font-serif text-xl font-semibold tracking-tight text-ink">
               {draft.title}
             </h1>
@@ -293,7 +343,7 @@ function DraftPanel({
               </Button>
             )}
             <Button
-              onClick={runAudit}
+              onClick={() => void runAudit()}
               disabled={running || draft.status === 'APPROVED'}
               className="bg-terra-600 hover:bg-terra-500"
             >
@@ -401,6 +451,8 @@ function DraftPanel({
             selectDraft(draft.id, 'remediation')
             setView('remediation')
           }}
+          onRetry={runAudit}
+          history={auditHistory}
           showRedacted={showRedacted}
           onToggleRedacted={() => setShowRedacted((s) => !s)}
         />
@@ -460,14 +512,19 @@ function AuditResultPanel({
   onGoRemediate,
   showRedacted,
   onToggleRedacted,
+  onRetry,
+  history,
 }: {
   result: AuditResult
   draft: DraftDTO
   onGoRemediate: () => void
   showRedacted: boolean
   onToggleRedacted: () => void
+  onRetry: () => void
+  history: AuditLineageEntry[]
 }) {
   const incomplete = auditHasEngineErrors(result.pillars)
+  const historical = result.version !== draft.version
   const failedPillars = result.pillars.filter((pillar) => pillar.status === 'error')
   const verdict = incomplete
     ? { text: 'Audit incomplete — rerun checks', cls: 'text-clay-600' }
@@ -493,6 +550,11 @@ function AuditResultPanel({
                 Compliance verdict
               </p>
               <p className={cn('text-xl font-bold', verdict.cls)}>{verdict.text}</p>
+              {incomplete && (
+                <span className="mt-1 inline-flex rounded-full border border-clay-300 bg-clay-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-clay-700">
+                  Incomplete
+                </span>
+              )}
               <p className="mt-1 text-xs text-stone-500">
                 {result.findings.length} findings ·{' '}
                 {result.findings.filter((f) => f.severity === 'critical').length} critical
@@ -521,12 +583,12 @@ function AuditResultPanel({
             </span>
             <Button
               onClick={onGoRemediate}
-              disabled={incomplete}
-              title={incomplete ? 'Rerun the failed checks before remediation or review.' : undefined}
+              disabled={incomplete || historical}
+              title={historical ? 'Historical audits are read-only; audit the current version to remediate.' : incomplete ? 'Rerun the failed checks before remediation or review.' : undefined}
               className="bg-ink hover:bg-stone-800"
             >
               <WandSparkles className="mr-2 h-4 w-4" />
-              {incomplete ? 'Rerun failed checks before remediation' : 'Open Remediation Studio'}
+              {historical ? 'Historical audit — read only' : incomplete ? 'Rerun failed checks before remediation' : 'Open Remediation Studio'}
             </Button>
           </div>
         </div>
@@ -544,6 +606,9 @@ function AuditResultPanel({
                 </li>
               ))}
             </ul>
+            <Button className="mt-3" size="sm" onClick={onRetry}>
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry failed checks
+            </Button>
           </div>
         )}
 
@@ -554,6 +619,8 @@ function AuditResultPanel({
           ))}
         </div>
       </div>
+
+      <VaultLineage result={result} history={history} />
 
       {/* redaction preview */}
       {result.redactedPreview && draft.kind === 'text' && (
@@ -618,6 +685,47 @@ function AuditResultPanel({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function VaultLineage({ result, history }: { result: AuditResult; history: AuditLineageEntry[] }) {
+  const previous = history
+    .filter((run) => run.id !== result.id && run.createdAt < result.createdAt)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  const previousRules = new Map((previous?.vaultSnapshot ?? []).map((rule) => [rule.clauseId, rule.ruleVer]))
+  const changes = result.vaultSnapshot.filter((rule) => previousRules.get(rule.clauseId) !== rule.ruleVer)
+  const removed = (previous?.vaultSnapshot ?? []).filter(
+    (rule) => !result.vaultSnapshot.some((current) => current.clauseId === rule.clauseId)
+  )
+
+  return (
+    <div className="rounded-xl border border-line bg-paper p-4">
+      <h3 className="text-sm font-bold text-ink">Vault rule lineage</h3>
+      <p className="mt-1 text-xs text-stone-500">
+        This audit used {result.vaultSnapshot.length} active rule versions.
+        {previous ? ` Compared with audit of v${previous.version}.` : ' This is the first recorded audit.'}
+      </p>
+      {previous && (changes.length > 0 || removed.length > 0) ? (
+        <ul className="mt-2 space-y-1 text-xs text-ink-soft">
+          {changes.map((rule) => (
+            <li key={rule.clauseId}>{rule.clauseId}: {previousRules.has(rule.clauseId) ? `v${previousRules.get(rule.clauseId)}` : 'new'} → v{rule.ruleVer}</li>
+          ))}
+          {removed.map((rule) => <li key={rule.clauseId}>{rule.clauseId}: v{rule.ruleVer} → inactive/removed</li>)}
+        </ul>
+      ) : previous ? (
+        <p className="mt-2 text-xs text-olive-700">No active rule versions changed since the previous audit.</p>
+      ) : null}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs font-medium text-terra-700">
+          Show rule versions used
+        </summary>
+        <ul className="mt-2 grid gap-1 text-[11px] text-ink-soft sm:grid-cols-2">
+          {result.vaultSnapshot.map((rule) => (
+            <li key={rule.clauseId}>{rule.clauseId} · v{rule.ruleVer}</li>
+          ))}
+        </ul>
+      </details>
+    </div>
   )
 }
 

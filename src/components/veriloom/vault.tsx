@@ -70,7 +70,7 @@ const TYPE_META: Record<
 type TabKey = 'ALL' | VaultItemDTO['type']
 
 export function VaultView() {
-  const { data, refresh } = useApp()
+  const { data, refresh, role } = useApp()
   const [tab, setTab] = useState<TabKey>('ALL')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<VaultItemDTO | null>(null)
@@ -105,11 +105,11 @@ export function VaultView() {
         title="Living Brand Vault"
         subtitle="The single source of truth. Every audit finding must cite one of these clauses — anything else is suppressed by the zero-hallucination guard."
         showDraftChip={false}
-        actions={
+        actions={role === 'admin' ? (
           <Button onClick={() => setCreating(true)} className="bg-terra-600 hover:bg-terra-500">
             <Plus className="mr-1.5 h-4 w-4" /> Add clause
           </Button>
-        }
+        ) : undefined}
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -170,10 +170,10 @@ export function VaultView() {
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {deleting?.clauseId}?</AlertDialogTitle>
+            <AlertDialogTitle>Archive {deleting?.clauseId}?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{deleting?.title}” will no longer be cited by audits. Existing findings keep
-              their recorded citations.
+              “{deleting?.title}” will be excluded from future audits. Existing audit citations
+              and the full rule history will be preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -184,12 +184,12 @@ export function VaultView() {
                 if (deleting) {
                   await fetch(`/api/vault/${deleting.id}`, { method: 'DELETE' })
                   await refresh()
-                  toast({ title: 'Clause removed' })
+                  toast({ title: 'Clause archived', description: 'Rule history has been preserved.' })
                 }
                 setDeleting(null)
               }}
             >
-              Remove clause
+              Archive clause
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -207,10 +207,21 @@ function VaultCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { refresh } = useApp()
+  const { refresh, role } = useApp()
   const meta = TYPE_META[item.type]
   const extra = (item.extra ?? {}) as Record<string, unknown>
   const [busy, setBusy] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [history, setHistory] = useState<{
+    version: number
+    title: string
+    content: string
+    active: boolean
+    editedBy: string
+    editNote: string | null
+    createdAt: string
+  }[]>([])
 
   return (
     <div
@@ -232,13 +243,40 @@ function VaultCard({
             {meta.label}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={onEdit} className="rounded-md p-1.5 text-faint hover:bg-parchment hover:text-ink" title="Edit">
-            <Pencil className="h-3.5 w-3.5" />
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            disabled={historyLoading}
+            onClick={async () => {
+              setHistoryLoading(true)
+              try {
+                const response = await fetch(`/api/vault/${item.id}`, { cache: 'no-store' })
+                const body = await response.json()
+                if (!response.ok) throw new Error(body.error ?? 'Could not load rule history.')
+                setHistory(body.history)
+                setHistoryOpen(true)
+              } catch (error) {
+                toast({ title: 'History unavailable', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
+              } finally {
+                setHistoryLoading(false)
+              }
+            }}
+            className="rounded-md p-1.5 text-faint hover:bg-parchment hover:text-ink"
+            title="View rule history"
+          >
+            <CalendarClock className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onDelete} className="rounded-md p-1.5 text-faint hover:bg-clay-50 hover:text-clay-600" title="Delete">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {role === 'admin' && (
+            <>
+              <button onClick={onEdit} className="rounded-md p-1.5 text-faint hover:bg-parchment hover:text-ink" title="Edit">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              {item.active && (
+                <button onClick={onDelete} className="rounded-md p-1.5 text-faint hover:bg-clay-50 hover:text-clay-600" title="Archive">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -269,28 +307,57 @@ function VaultCard({
 
       <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-2.5">
         <span className="text-[10.5px] text-faint">
-          Updated {timeAgo(item.updatedAt)}
+          Updated {timeAgo(item.updatedAt)} · v{item.ruleVer}
         </span>
         <div className="flex items-center gap-1.5">
           <span className="text-[10.5px] font-medium text-faint">active</span>
           <Switch
             checked={item.active}
-            disabled={busy}
+            disabled={busy || role !== 'admin'}
             onCheckedChange={async (v) => {
               setBusy(true)
               try {
-                await fetch(`/api/vault/${item.id}`, {
+                const response = await fetch(`/api/vault/${item.id}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ active: v }),
                 })
+                if (!response.ok) throw new Error((await response.json()).error ?? 'Could not update rule.')
                 await refresh()
+              } catch (error) {
+                toast({ title: 'Rule update failed', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' })
               } finally {
                 setBusy(false)
               }
             }}
           />
         </div>
+        <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{item.clauseId} — rule history</DialogTitle>
+              <DialogDescription>Audits retain the exact active version of every cited rule.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {history.map((version, index) => {
+                const prior = history[index + 1]
+                const changed = Boolean(prior && (version.content !== prior.content || version.title !== prior.title || version.active !== prior.active))
+                return (
+                  <section key={version.version} className="rounded-lg border border-line p-3">
+                    <div className="flex flex-wrap justify-between gap-2 text-xs">
+                      <strong>Version {version.version}{version.active ? '' : ' · archived'}</strong>
+                      <span className="text-faint">{new Date(version.createdAt).toLocaleString()} · {version.editedBy}</span>
+                    </div>
+                    {version.editNote && <p className="mt-1 text-xs text-terra-700">{version.editNote}</p>}
+                    {changed && <p className="mt-1 text-[11px] font-semibold text-ochre-700">Changed from the prior version</p>}
+                    <h4 className="mt-2 text-sm font-semibold text-ink">{version.title}</h4>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-ink-soft">{version.content}</p>
+                  </section>
+                )
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
@@ -335,6 +402,7 @@ function ClauseDialog({
 }) {
   const [form, setForm] = useState<ClauseForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [editNote, setEditNote] = useState('')
   const [initialised, setInitialised] = useState<string | null>(null)
 
   // sync form when dialog target changes
@@ -354,8 +422,10 @@ function ClauseDialog({
         term: typeof e.term === 'string' ? e.term : '',
         figures: Array.isArray(e.figures) ? (e.figures as string[]).join(', ') : '',
       })
+      setEditNote('')
     } else {
       setForm(EMPTY_FORM)
+      setEditNote('')
     }
   }
   if (!open && initialised !== null) setInitialised(null)
@@ -401,6 +471,7 @@ function ClauseDialog({
         title: form.title.trim(),
         content: form.content.trim(),
         extra: buildExtra(),
+        editNote,
       }
       const res = item
         ? await fetch(`/api/vault/${item.id}`, {
@@ -480,6 +551,18 @@ function ClauseDialog({
               placeholder="Write the rule or fact in full sentences…"
             />
           </div>
+          {item && (
+            <div>
+              <Label className="text-xs">Change note (optional)</Label>
+              <Input
+                className="mt-1"
+                maxLength={500}
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="Why is this rule changing?"
+              />
+            </div>
+          )}
 
           {form.type === 'COLOR' && (
             <div className="flex items-end gap-3">

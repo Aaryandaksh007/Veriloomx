@@ -82,14 +82,19 @@ export const useApp = create<AppState>()(
     }),
     {
       name: 'veriloom-session',
-      partialize: (s) => ({ role: s.role, view: s.view, selectedDraftId: s.selectedDraftId }),
+      partialize: (s) => ({ view: s.view, selectedDraftId: s.selectedDraftId }),
     }
   )
 )
 
-export const roleIdentity = (role: Role) =>
-  role === 'creator'
-    ? { name: 'Maya Chen', label: 'Creator' }
-    : role === 'manager'
-      ? { name: 'Dev Kapoor', label: 'Brand Manager' }
-      : { name: 'Aaryan Sharma', label: 'Authorised Reviewer' }
+export const roleIdentity = (role: Role, name = 'Signed-in user') => ({
+  name,
+  label: ROLE_LABELS[role],
+})
+
+const ROLE_LABELS: Record<Role, string> = {
+  creator: 'Creator',
+  manager: 'Brand Manager',
+  reviewer: 'Authorised Reviewer',
+  admin: 'Administrator',
+}

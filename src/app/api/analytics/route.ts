@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { Finding } from '@/lib/types'
+import { currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,10 @@ export const dynamic = 'force-dynamic'
  * violation & override stats, blind-spot candidates, AI ledger.
  */
 export async function GET() {
+  if (!(await currentUser())) {
+    return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
+  }
+
   const audits = await db.auditRun.findMany({
     orderBy: { createdAt: 'asc' },
     include: { actions: true },

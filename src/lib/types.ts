@@ -103,8 +103,38 @@ export interface PillarSummary {
   detail: string
 }
 
-export function auditHasEngineErrors(pillars: readonly PillarSummary[]): boolean {
-  return pillars.some((pillar) => pillar.status === 'error')
+const REQUIRED_AUDIT_PILLARS: readonly Pillar[] = [
+  'tone',
+  'terminology',
+  'claims',
+  'visual',
+  'accessibility',
+  'confidentiality',
+]
+const COMPLETED_PILLAR_STATUSES: readonly PillarSummary['status'][] = [
+  'pass',
+  'warn',
+  'fail',
+  'skipped',
+]
+
+export function auditHasEngineErrors(pillars: readonly PillarSummary[] | null | undefined): boolean {
+  if (!Array.isArray(pillars) || pillars.length !== REQUIRED_AUDIT_PILLARS.length) return true
+
+  const seen = new Set<Pillar>()
+  for (const pillar of pillars) {
+    if (
+      !pillar ||
+      !REQUIRED_AUDIT_PILLARS.includes(pillar.pillar) ||
+      seen.has(pillar.pillar) ||
+      !COMPLETED_PILLAR_STATUSES.includes(pillar.status)
+    ) {
+      return true
+    }
+    seen.add(pillar.pillar)
+  }
+
+  return seen.size !== REQUIRED_AUDIT_PILLARS.length
 }
 
 export interface AuditResult {
@@ -117,6 +147,7 @@ export interface AuditResult {
   suppressed: number
   redactedPreview: string | null
   aiLedger: AiLedgerEntry[]
+  vaultSnapshot: { clauseId: string; ruleVer: number }[]
   createdAt: string
 }
 
@@ -146,15 +177,16 @@ export const STATUS_META: Record<
   APPROVED: { label: 'Approved', desc: 'Signed off — certificate issued', tone: 'bg-olive-50 text-olive-700 border-olive-200' },
 }
 
-export type Role = 'creator' | 'manager' | 'reviewer'
+export type Role = 'creator' | 'manager' | 'reviewer' | 'admin'
 
 export const ROLE_META: Record<
   Role,
   { label: string; person: string; desc: string }
 > = {
-  creator: { label: 'Creator', person: 'Maya Chen', desc: 'Drafts & remediation' },
-  manager: { label: 'Brand Manager', person: 'Dev Kapoor', desc: 'Pre-screening & changes' },
-  reviewer: { label: 'Authorised Reviewer', person: 'Aaryan Sharma', desc: 'Final sign-off & certificate' },
+  creator: { label: 'Author', person: 'Signed-in user', desc: 'Drafts, audits & remediation' },
+  manager: { label: 'Reviewer', person: 'Signed-in user', desc: 'Request changes before approval' },
+  reviewer: { label: 'Approver', person: 'Signed-in user', desc: 'Final sign-off & certificate' },
+  admin: { label: 'Administrator', person: 'Administrator', desc: 'Account and Vault administration' },
 }
 
 export interface VaultItemDTO {
@@ -165,6 +197,7 @@ export interface VaultItemDTO {
   content: string
   extra: Record<string, unknown> | null
   active: boolean
+  ruleVer: number
   createdAt: string
   updatedAt: string
 }
@@ -216,6 +249,8 @@ export interface DraftVersionDTO {
   id: string
   version: number
   content: string
+  imageData?: string | null
+  imageMeta?: ImageMeta | null
   note: string | null
   createdAt: string
 }

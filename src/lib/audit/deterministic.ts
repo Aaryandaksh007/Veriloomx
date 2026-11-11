@@ -93,10 +93,18 @@ function normalizeFigure(fig: string): string {
   return fig.replace(/[$,\s+]/g, '').toLowerCase()
 }
 
+function isYearLikeFigure(value: string): boolean {
+  const digits = value.replace(/\D/g, '')
+  if (!/^\d{4}$/.test(digits)) return false
+  const year = Number(digits)
+  return year >= 1900 && year <= 2099
+}
+
 export function runClaimsScan(
   draftText: string,
   vaultItems: VaultItem[]
 ): Finding[] {
+  if (!draftText.trim()) return []
   const findings: Finding[] = []
   const factItems = vaultItems.filter((v) => v.type === 'FACT')
   const ruleItem = vaultItems.find((v) => v.clauseId === 'VL-RULE-001') ?? null
@@ -120,6 +128,7 @@ export function runClaimsScan(
     const norm = normalizeFigure(raw)
     const digitCount = norm.replace(/[^\d]/g, '').length
     const isMoneyOrPct = /[$%]/.test(raw)
+    if (isYearLikeFigure(raw)) continue
     if (!isMoneyOrPct && digitCount < 2) continue
     if (verified.has(norm)) continue
 

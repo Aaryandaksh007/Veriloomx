@@ -303,8 +303,23 @@ export async function ensureSeeded(): Promise<void> {
   if (seedPromise) return seedPromise
   seedPromise = (async () => {
     const count = await db.vaultItem.count()
-    if (count > 0) return
-    await seedNow()
+    if (count === 0) await seedNow()
+    const items = await db.vaultItem.findMany({ include: { history: { select: { id: true }, take: 1 } } })
+    const initialVersions = items
+      .filter((item) => item.history.length === 0)
+      .map((item) => ({
+        vaultItemId: item.id,
+        version: item.ruleVer,
+        title: item.title,
+        content: item.content,
+        extra: item.extra,
+        active: item.active,
+        editedBy: 'System migration',
+        editNote: 'Initial rule snapshot',
+      }))
+    if (initialVersions.length) {
+      await db.vaultItemVersion.createMany({ data: initialVersions, skipDuplicates: true })
+    }
   })()
   try {
     await seedPromise
@@ -360,7 +375,7 @@ async function seedNow(): Promise<void> {
     },
   })
   await db.draftVersion.create({
-    data: { draftId: d2.id, version: 1, content: '', note: 'Original submission' },
+    data: { draftId: d2.id, version: 1, content: '', imageData: banner.imageData, imageMeta: banner.imageMeta, note: 'Original submission' },
   })
 
   // ── Draft 3: press release with subtle issues ─────────────

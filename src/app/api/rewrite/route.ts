@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { intentPreservingRewrite } from '@/lib/audit/rag'
 import type { Finding } from '@/lib/types'
+import { hasRole } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -11,6 +12,8 @@ export const maxDuration = 60
  * of a flagged span (deterministic intent signature constrains the LLM).
  */
 export async function POST(req: NextRequest) {
+  const user = await hasRole('creator')
+  if (!user) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   const auditId = String(body?.auditId ?? '')
   const findingKey = String(body?.findingKey ?? '')
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
   await db.eventLog.create({
     data: {
       draftId: audit.draftId,
-      actor: body?.actor ?? draft.creator,
+      actor: user.name,
       action: 'AI_CALL',
       details: JSON.stringify({ ...res.ledger, purpose: `Intent-preserving rewrite (${findingKey})` }),
     },

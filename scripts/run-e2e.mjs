@@ -40,7 +40,7 @@ async function waitForServer(server, url) {
   for (let attempt = 0; attempt < 60; attempt++) {
     if (server.exitCode !== null) throw new Error(`Test server exited with status ${server.exitCode}.`)
     try {
-      const response = await fetch(`${url}/api/bootstrap`, { signal: AbortSignal.timeout(3000) })
+      const response = await fetch(`${url}/api/setup`, { signal: AbortSignal.timeout(3000) })
       if (response.ok) return
     } catch {
       await delay(1000)
@@ -81,6 +81,8 @@ async function main() {
     ...process.env,
     DATABASE_URL: databaseUrl,
     DIRECT_URL: databaseUrl,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || randomUUID() + randomUUID(),
+    INITIAL_ADMIN_SETUP_KEY: process.env.INITIAL_ADMIN_SETUP_KEY || randomUUID() + randomUUID(),
     NODE_ENV: 'production',
   }
 

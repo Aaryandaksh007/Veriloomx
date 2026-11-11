@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
   LibraryBig,
@@ -13,19 +14,13 @@ import {
   ClipboardCheck,
   BarChart3,
   Award,
-  UserRound,
   ShieldCheck,
 } from 'lucide-react'
 import { useApp, type View, roleIdentity } from '@/lib/store'
-import { ROLE_META, type Role } from '@/lib/types'
+import { type Role } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { UserManagement } from '@/components/veriloom/user-management'
 
 const NAV: { id: View; label: string; icon: React.ComponentType<{ className?: string }>; hint: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Overview & workflow' },
@@ -54,6 +49,7 @@ export function Logo() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession()
   const { view, setView, role, setRole, data, refresh, loading } = useApp()
 
   useEffect(() => {
@@ -69,7 +65,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id)
   }, [refresh])
 
-  const identity = roleIdentity(role)
+  useEffect(() => {
+    const sessionRole = session?.user.role
+    if (sessionRole && ['creator', 'manager', 'reviewer', 'admin'].includes(sessionRole)) {
+      setRole(sessionRole as Role)
+    }
+  }, [session?.user.role, setRole])
+
+  const identity = roleIdentity(role, session?.user.name || session?.user.email || 'Signed-in user')
   const clauseCount = data?.vault.length ?? 0
   const draftCount = data?.drafts.length ?? 0
 
@@ -125,24 +128,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="space-y-3 border-t border-line p-4">
           <div className="rounded-lg border border-line bg-paper p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
-              Acting as
+              Signed in
             </p>
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectTrigger className="mt-1.5 h-8 border-line bg-paper text-xs text-ink">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(ROLE_META) as Role[]).map((r) => (
-                  <SelectItem key={r} value={r} className="text-xs">
-                    {ROLE_META[r].person} · {ROLE_META[r].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-faint">{ROLE_META[role].desc}</p>
-            <p className="mt-2 border-t border-line pt-2 text-[10px] leading-relaxed text-ochre-700">
-              Demo only: role switching is simulated; no account sign-in is configured.
-            </p>
+            <p className="mt-1 font-semibold text-ink">{identity.name}</p>
+            <p className="text-xs text-faint">{identity.label}</p>
+            {role === 'admin' && <div className="mt-3"><UserManagement /></div>}
+            <Button variant="ghost" size="sm" className="mt-2 h-7 px-0 text-xs text-faint" onClick={() => void signOut({ callbackUrl: '/login' })}>
+              Sign out
+            </Button>
           </div>
           <p className="flex items-center gap-1.5 px-1 text-[10px] text-faint">
             Team opopopxxnot · We Code Coders
@@ -156,23 +149,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="border-b border-line bg-parchment px-4 py-3 lg:hidden print:hidden">
           <div className="flex items-center justify-between">
             <Logo />
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectTrigger className="h-8 w-40 border-line bg-paper text-xs">
-                <UserRound className="mr-1 h-3.5 w-3.5 text-faint" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(ROLE_META) as Role[]).map((r) => (
-                  <SelectItem key={r} value={r} className="text-xs">
-                    {ROLE_META[r].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="text-right">
+              <p className="text-xs font-semibold text-ink">{identity.name}</p>
+              <p className="text-[10px] text-faint">{identity.label}</p>
+            </div>
           </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-faint">
-            Demo only: role switching is simulated; no account sign-in is configured.
-          </p>
           <nav
             className="mt-3 -mb-3 flex gap-4 overflow-x-auto border-b border-line px-1 vl-scroll"
             aria-label="Main navigation"

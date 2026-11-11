@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { hasRole } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,8 @@ export const dynamic = 'force-dynamic'
  *   note?, appliedText?, actor?, actorRole? }
  */
 export async function POST(req: NextRequest) {
+  const user = await hasRole('creator')
+  if (!user) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
@@ -51,8 +54,8 @@ export async function POST(req: NextRequest) {
       auditId,
       findingKey,
       action,
-      actor: String(body.actor ?? 'Maya Chen'),
-      actorRole: String(body.actorRole ?? 'creator'),
+      actor: user.name,
+      actorRole: user.role,
       note: body.note ? String(body.note) : null,
       appliedText: body.appliedText ? String(body.appliedText) : null,
     },
@@ -102,6 +105,7 @@ export async function POST(req: NextRequest) {
 
 /** DELETE {auditId, findingKey} — undo a decision (finding returns to pending). */
 export async function DELETE(req: NextRequest) {
+  if (!(await hasRole('creator'))) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   const auditId = String(body?.auditId ?? '')
   const findingKey = String(body?.findingKey ?? '')

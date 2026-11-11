@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { suggestClauseRewrite } from '@/lib/audit/rag'
 import type { Finding } from '@/lib/types'
+import { currentUser, hasRole } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -12,6 +13,8 @@ export const maxDuration = 60
  * With apply: writes the provided phrasing into the Vault clause.
  */
 export async function POST(req: NextRequest) {
+  const user = await currentUser()
+  if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const body = await req.json().catch(() => null)
   const clauseId = String(body?.clauseId ?? '')
   if (!clauseId) return NextResponse.json({ error: 'clauseId is required' }, { status: 400 })
@@ -20,14 +23,35 @@ export async function POST(req: NextRequest) {
   if (!clause) return NextResponse.json({ error: 'Clause not found' }, { status: 404 })
 
   if (body?.apply) {
+    const admin = await hasRole('admin')
+    if (!admin) return NextResponse.json({ error: 'Administrator access required to change Vault rules.' }, { status: 403 })
     const newContent = String(body.apply).trim()
     if (newContent.length < 20) {
       return NextResponse.json({ error: 'Suggested clause too short' }, { status: 400 })
     }
-    await db.vaultItem.update({ where: { clauseId }, data: { content: newContent } })
+    const updated = await db.$transaction(async (tx) => {
+      const current = await tx.vaultItem.findUniqueOrThrow({ where: { clauseId } })
+      const item = await tx.vaultItem.update({
+        where: { clauseId },
+        data: { content: newContent, ruleVer: current.ruleVer + 1 },
+      })
+      await tx.vaultItemVersion.create({
+        data: {
+          vaultItemId: item.id,
+          version: item.ruleVer,
+          title: item.title,
+          content: item.content,
+          extra: item.extra,
+          active: item.active,
+          editedBy: admin.name,
+          editNote: 'AI-assisted clarification',
+        },
+      })
+      return item
+    })
     await db.eventLog.create({
       data: {
-        actor: 'Dev Kapoor',
+        actor: admin.name,
         action: 'VAULT_EDIT',
         details: JSON.stringify({
           verb: 'clarified',
@@ -37,7 +61,7 @@ export async function POST(req: NextRequest) {
         }),
       },
     })
-    return NextResponse.json({ ok: true, content: newContent })
+    return NextResponse.json({ ok: true, content: updated.content, ruleVer: updated.ruleVer })
   }
 
   // aggregate stats for this clause
@@ -67,7 +91,7 @@ export async function POST(req: NextRequest) {
 
   await db.eventLog.create({
     data: {
-      actor: 'Dev Kapoor',
+      actor: user.name,
       action: 'AI_CALL',
       details: JSON.stringify({ ...res.ledger, purpose: `Blind-spot phrasing suggestion (${clauseId})` }),
     },

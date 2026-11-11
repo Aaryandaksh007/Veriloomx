@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { hasRole, currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,7 @@ const TYPE_PREFIX: Record<string, string> = {
 }
 
 export async function GET() {
+  if (!(await currentUser())) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const items = await db.vaultItem.findMany({ orderBy: { clauseId: 'asc' } })
   return NextResponse.json({
     items: items.map((v) => ({
@@ -24,6 +26,7 @@ export async function GET() {
       content: v.content,
       extra: v.extra ? JSON.parse(v.extra) : null,
       active: v.active,
+      ruleVer: v.ruleVer,
       createdAt: v.createdAt.toISOString(),
       updatedAt: v.updatedAt.toISOString(),
     })),
@@ -31,6 +34,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await hasRole('admin')
+  if (!user) return NextResponse.json({ error: 'Administrator access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
@@ -64,11 +69,24 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  await db.vaultItemVersion.create({
+    data: {
+      vaultItemId: item.id,
+      version: item.ruleVer,
+      title: item.title,
+      content: item.content,
+      extra: item.extra,
+      active: item.active,
+      editedBy: user.name,
+      editNote: 'Initial rule version',
+    },
+  })
+
   await db.eventLog.create({
     data: {
-      actor: body.actor ?? 'Dev Kapoor',
+      actor: user.name,
       action: 'VAULT_EDIT',
-      details: JSON.stringify({ verb: 'created', clauseId, title }),
+      details: JSON.stringify({ verb: 'created', clauseId, title, ruleVer: item.ruleVer }),
     },
   })
 
@@ -81,6 +99,7 @@ export async function POST(req: NextRequest) {
       content: item.content,
       extra: item.extra ? JSON.parse(item.extra) : null,
       active: item.active,
+      ruleVer: item.ruleVer,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     },

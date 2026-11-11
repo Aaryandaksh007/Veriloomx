@@ -9,6 +9,20 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Users — real accounts with role-based access (Improvement 2)
+// ─────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   // salted scrypt hash
+  role         String   @default("creator") // creator | manager | reviewer | admin
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
 // VeriLoom AI — Living Brand Vault
 // Every clause carries a unique clause_id used for citation
 // grounding of every audit finding.
@@ -21,8 +35,32 @@ model VaultItem {
   content   String // the rule text / fact statement (verbatim citation source)
   extra     String? // JSON payload: { hex, replaceWith, aliases[], category, ... }
   active    Boolean  @default(true)
+  ruleVer   Int      @default(1) // current version counter (Improvement 3)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  history VaultItemVersion[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vault rule version history (Improvement 3)
+// Tracks every edit so you can see what changed and when.
+// ─────────────────────────────────────────────────────────────
+model VaultItemVersion {
+  id          String    @id @default(cuid())
+  vaultItemId String
+  vaultItem   VaultItem @relation(fields: [vaultItemId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  content     String
+  extra       String?
+  active      Boolean
+  editedBy    String    @default("Dev Kapoor")
+  editNote    String?   // optional note describing the change
+  createdAt   DateTime  @default(now())
+
+  @@index([vaultItemId])
+  @@unique([vaultItemId, version])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -52,10 +90,13 @@ model DraftVersion {
   draft     Draft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
   version   Int
   content   String
+  imageData String?
+  imageMeta String?
   note      String? // "Original submission" | "Remediated — 5 fixes applied"
   createdAt DateTime @default(now())
 
   @@index([draftId])
+  @@unique([draftId, version])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -71,6 +112,7 @@ model AuditRun {
   suppressed      Int      @default(0) // ungrounded AI flags discarded by the citation validator
   redactedPreview String? // text actually transmitted to external AI (post-scrub)
   aiLedger        String // JSON: [{ model, purpose, ts }] — transparent AI disclosure
+  vaultSnapshot   String?  // JSON: [{clauseId, ruleVer}] — which rule versions were used (Improvement 3)
   createdAt       DateTime @default(now())
 
   actions FindingAction[]

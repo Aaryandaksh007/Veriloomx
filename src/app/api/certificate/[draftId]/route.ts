@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { db } from '@/lib/db'
 import { serialiseAudit } from '@/lib/audit/engine'
 import { auditHasEngineErrors, type CertificateData, type Finding, type FindingActionDTO, type PillarSummary } from '@/lib/types'
+import { currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,10 @@ type Ctx = { params: Promise<{ draftId: string }> }
  * The SHA-256 integrity hash covers the full audit record.
  */
 export async function GET(_req: NextRequest, ctx: Ctx) {
+  if (!(await currentUser())) {
+    return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
+  }
+
   const { draftId } = await ctx.params
 
   const draft = await db.draft.findUnique({
@@ -76,6 +81,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         clauseId: f.clauseId,
       })),
       suppressed: audit.suppressed,
+      vaultSnapshot: auditResult.vaultSnapshot,
     },
     overrides: overrides.map((o) => ({ key: o.findingKey, note: o.note, actor: o.actor })),
     models: auditResult.aiLedger.map((l) => l.model),

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { serialiseAudit } from '@/lib/audit/engine'
 import type { FindingActionDTO } from '@/lib/types'
+import { hasRole, currentUser } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
+  if (!(await currentUser())) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
   const { id } = await ctx.params
   const draft = await db.draft.findUnique({
     where: { id },
@@ -17,6 +19,18 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     },
   })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (_req.nextUrl.searchParams.get('versions') === '1') {
+    return NextResponse.json({
+      versions: draft.versions.map((v) => ({
+        id: v.id,
+        version: v.version,
+        content: v.content,
+        note: v.note,
+        createdAt: v.createdAt.toISOString(),
+      })),
+    })
+  }
 
   const audits = await db.auditRun.findMany({
     where: { draftId: id },
@@ -73,6 +87,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
+  const user = await hasRole('creator')
+  if (!user) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const { id } = await ctx.params
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -92,6 +108,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim()
   if (typeof body.channel === 'string' && body.channel) data.channel = body.channel
   if (typeof body.content === 'string' && body.content !== draft.content) {
+    if (draft.kind === 'text' && !body.content.trim()) {
+      return NextResponse.json({ error: 'Text drafts cannot be empty.' }, { status: 400 })
+    }
     data.content = body.content
     contentChanged = true
   }
@@ -118,7 +137,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     await db.eventLog.create({
       data: {
         draftId: id,
-        actor: body.actor ?? draft.creator,
+        actor: user.name,
         action: 'STATUS_CHANGE',
         details: JSON.stringify({
           from: draft.status,
@@ -133,6 +152,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
+  if (!(await hasRole('creator'))) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const { id } = await ctx.params
   await db.draft.delete({ where: { id } })
   return NextResponse.json({ ok: true })

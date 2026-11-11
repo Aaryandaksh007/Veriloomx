@@ -127,6 +127,16 @@ const TONE_PROBES: { re: RegExp; clauseId: string; title: string; suggestion: st
  * safe to run on every keystroke.
  */
 export function liveScan(text: string, vault: VaultItemDTO[]): LiveScanResult {
+  if (!text.trim()) {
+    return {
+      hits: [],
+      counts: { banned: 0, deprecated: 0, confidential: 0, figure: 0, tone: 0 },
+      total: 0,
+      redacted: text,
+      masked: 0,
+    }
+  }
+
   const hits: LiveHit[] = []
   let n = 0
   const items = vault.filter((v) => v.active)
@@ -235,6 +245,8 @@ export function liveScan(text: string, vault: VaultItemDTO[]): LiveScanResult {
   for (const re of FIGURE_RES) {
     matchAll(re, (m) => {
       const cand = normFigure(m[0])
+      const digits = cand.replace(/\D/g, '')
+      if (/^\d{4}$/.test(digits) && Number(digits) >= 1900 && Number(digits) <= 2099) return
       if (approved.has(cand)) return
       const contextStart = Math.max(
         text.lastIndexOf('.', m.index),

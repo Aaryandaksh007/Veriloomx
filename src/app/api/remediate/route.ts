@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { replaceQuote } from '@/lib/diff'
 import { auditHasEngineErrors, type Finding, type PillarSummary } from '@/lib/types'
+import { hasRole } from '@/lib/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,8 @@ export const dynamic = 'force-dynamic'
  * remediated version (Human Overrides keep the original wording).
  */
 export async function POST(req: NextRequest) {
+  const user = await hasRole('creator')
+  if (!user) return NextResponse.json({ error: 'Author access required.' }, { status: 403 })
   const body = await req.json().catch(() => null)
   const draftId = String(body?.draftId ?? '')
   const auditId = String(body?.auditId ?? '')
@@ -91,7 +94,7 @@ export async function POST(req: NextRequest) {
     await db.eventLog.create({
       data: {
         draftId,
-        actor: body?.actor ?? draft.creator,
+        actor: user.name,
         action: 'STATUS_CHANGE',
         details: JSON.stringify({
           from: draft.status,
@@ -127,6 +130,8 @@ export async function POST(req: NextRequest) {
         draftId,
         version,
         content: '',
+        imageData: draft.imageData,
+        imageMeta: draft.imageMeta,
         note: `Remediated — ${overrides.length} human override(s) preserved`,
       },
     })
@@ -136,7 +141,7 @@ export async function POST(req: NextRequest) {
   await db.eventLog.create({
     data: {
       draftId,
-      actor: body?.actor ?? draft.creator,
+      actor: user.name,
       action: 'STATUS_CHANGE',
       details: JSON.stringify({ from: draft.status, to: 'REMEDIATED', kind: 'image' }),
     },
